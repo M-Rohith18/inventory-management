@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block content %}
+
+{% if messages %}
+  <div aria-live="polite" aria-atomic="true" class="position-relative">
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+      {% for message in messages %}
+        <div class="toast align-items-center text-bg-{%if message.tags == "success"%}success{%else%}danger{%endif%} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body">
+              {{ message }}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+   <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.toast').forEach(function(toastEl) {
+        new bootstrap.Toast(toastEl).show();
+      });
+      {% if redirect_to_transaction %}
+        setTimeout(function() {
+          window.location.href = "{% url 'inventory_project:transaction' %}";
+        }, 3000);
+      {% endif %}
+    });
+  </script>
+{% endif %}
+
+<section class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+      <div class="card shadow-sm border-0 rounded-4">
+        <div class="card-header bg-primary text-white rounded-top-4">
+          <h4 class="mb-0 text-center py-2">Add / Reduce Stock</h4>
+        </div>
+        <div class="card-body p-4">
+          
+          <!-- Alert for non-field errors -->
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+              {% for error in form.non_field_errors %}
+                <div>{{ error }}</div>
+              {% endfor %}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endif %}
+
+          <form method="post">
+            {% csrf_token %}
+
+            <!-- Item Selector -->
+            <div class="mb-3">
+              <label for="item" class="form-label">Select Item</label>
+              <select id="item" class="form-control {% if form.Name.errors %}is-invalid{% endif %}" name="Name">
+                <option value="">-- Choose Item --</option>
+                {% for item in items %}
+                  <option value="{{ item.id }}">{{ item.Name }}</option>
+                {% endfor %}
+              </select>
+              {% if form.Name.errors %}
+                <div class="invalid-feedback">
+                  {{ form.Name.errors }}
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- Transaction Type -->
+            <div class="mb-3">
+              <label for="transaction_type" class="form-label">Transaction Type</label>
+              <select id="transaction_type" class="form-control {% if form.Transaction_type.errors %}is-invalid{% endif %}" name="Transaction_type">
+                <option value="">-- Choose Type --</option>
+                <option value="IN">ADD</option>
+                <option value="OUT">REDUCE</option>
+              </select>
+              {% if form.Transaction_type.errors %}
+                <div class="invalid-feedback">
+                  {{ form.Transaction_type.errors }}
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- Quantity -->
+            <div class="mb-3">
+              <label for="quantity" class="form-label">Quantity</label>
+              <input type="number" id="quantity" name="Quantity" class="form-control {% if form.Quantity.errors %}is-invalid{% endif %}"  placeholder="Enter quantity" value="{{ form.Quantity.value|default:'' }}">
+              {% if form.Quantity.errors %}
+                <div class="invalid-feedback">
+                  {{ form.Quantity.errors}}
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- Notes (Optional) -->
+            <div class="mb-4">
+              <label for="notes" class="form-label">Notes (Optional)</label>
+              <textarea id="notes" name="Notes" class="form-control" rows="3" placeholder="e.g., Damaged goods, restocked by supplier">{{ form.notes.value|default:'' }}</textarea>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" class="btn btn-primary w-100 py-2">
+              <i class="bi bi-arrow-left-right me-1"></i> Submit Transaction
+            </button>
+          </form>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

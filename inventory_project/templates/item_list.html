@@ -1,0 +1,38 @@
+{% extends 'base.html'%}
+{%block content%}
+  <div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h1 class="mb-0" style= "font-family: Georgia, serif;">Inventory Item List</h1>
+      
+    </div>
+    <!-- Responsive Table -->
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover align-middle">
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Item Name</th>
+            <th>Current Stock</th>
+          </tr>
+        </thead>
+        <tbody>
+            {%for item in page_obj%}
+          <tr>
+            <td>{{item.Category}}</td>
+            <td>{{item.Name}}</td>
+            <td>{{item.Current_Stock}}</td>
+          </tr>
+            {%endfor%}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  
+  <!-- Paginator -->
+   {% include 'includes/paginator.html'%}
+{%endblock%}
+  
+
+
+
+

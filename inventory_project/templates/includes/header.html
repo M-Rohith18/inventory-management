@@ -1,0 +1,26 @@
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid">
+      <a class="navbar-brand fw-bold" href="#">InventoryApp</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" 
+              aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+
+      <div class="collapse navbar-collapse" id="navbarContent">
+        <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+          <li class="nav-item">
+            <a class="nav-link" href="{% url "inventory_project:item_list"%}">Home</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url "inventory_project:add_new_item"%}">Add Item</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url "inventory_project:add_reduce"%}">Add/Reduce Stock</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url "inventory_project:transaction"%}"> Transaction</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>

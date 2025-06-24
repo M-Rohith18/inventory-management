@@ -1,0 +1,12 @@
+from . import views
+from django.urls import path
+
+app_name="inventory_project"
+
+urlpatterns = [
+    path('', views.item_list, name='item_list'),
+    path('add_new',views.add_new_item, name='add_new_item'),
+    path('add_reduce',views.add_reduce, name= 'add_reduce'),
+    path('transaction_stock',views.transaction, name= 'transaction')
+]
+
