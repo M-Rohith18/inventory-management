@@ -1,7 +1,9 @@
 from django import forms
 from .models import Category, Item, Stock_Transactions
+from django.contrib.auth.models import User
 
-#client side validation  / field client
+
+#client side validation  / field  validation
 class AddForm(forms.ModelForm):
     Name = forms.CharField(label = "Item Name",required= True,max_length= 50)
     Category = forms.ModelChoiceField(queryset = Category.objects.all(),label="Category")
@@ -14,7 +16,7 @@ class AddForm(forms.ModelForm):
         model = Item
         fields = ["Name","Category","Unit","Sku","Description","Current_Stock"]
 
-    # server side validation
+    # server side validation / non field.
     def clean(self):
         cleaned_data = super().clean()
         unit_name = cleaned_data.get("Unit")
@@ -51,4 +53,25 @@ class AddReduceForm(forms.ModelForm):
             raise forms.ValidationError("Enter Positive Value.")
 
         
-    
+class RegisterForm(forms.ModelForm):
+    username = forms.CharField(label = "Full Name", max_length=100, required=True)
+    email = forms.EmailField(label = "Email address",max_length=50,required=True)
+    password = forms.CharField(label = "Password",max_length=30,required=True)
+    password_confirm = forms.CharField(label = "Confirm Password",max_length=30,required=True)
+
+    class Meta:
+        model = User
+        fields = ["username","email","password"]
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get("password")
+        password_confirm = cleaned_data.get("password_confirm")
+        Name = cleaned_data.get("username")
+
+        if(password and password_confirm and password != password_confirm):
+            raise forms.ValidationError("password doesn't match")
+        
+class LoginForm(forms.Form):
+    username = forms.CharField(label="User Name",max_length=20,required=True)
+    password = forms.CharField(label="Password",max_length=20,required=True)

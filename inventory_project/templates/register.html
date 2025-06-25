@@ -1,0 +1,105 @@
+    {% extends "base.html"%}
+    {% block content%}
+    {% if messages %}
+  <div aria-live="polite" aria-atomic="true" class="position-relative">
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+      {% for message in messages %}
+        <div class="toast align-items-center text-bg-{%if message.tags == "success"%}success{%else%}danger{%endif%} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body">
+              {{ message }}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+   <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.toast').forEach(function(toastEl) {
+        new bootstrap.Toast(toastEl).show();
+      });
+      {% if redirect_to_login %}
+        setTimeout(function() {
+          window.location.href = "{% url 'inventory_project:login' %}";
+        }, 3000);
+      {% endif %}
+    });
+  </script>
+{% endif %}
+
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-md-7 col-lg-6">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-primary text-white text-center rounded-top">
+          <h4 class="mb-0 py-2">Register Account</h4>
+
+          <!-- Alert for non-field errors -->
+          {% if form.non_field_errors %}
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+              {% for error in form.non_field_errors %}
+                <div>{{ error }}</div>
+              {% endfor %}
+
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+          {% endif %}
+        </div>
+        <div class="card-body p-4">
+          <form method = "post">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label for="name" class="form-label">Full Name</label>
+              <input type="text" class="form-control {% if form.username.errors %}is-invalid{% endif %}" id="name" name="username" value="{{form.username.value| default:""}}">
+              {% if form.username.errors %}
+                <div class="invalid-feedback">
+                  {{ form.username.errors}}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label for="email" class="form-label">Email address</label>
+              <input type="email" class="form-control {% if form.email.errors %}is-invalid{% endif %}" id="email" name="email" value="{{form.email.value| default:""}}" >
+              {% if form.email.errors %}
+                <div class="invalid-feedback">
+                  {{ form.email.errors}}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label for="password" class="form-label">Password</label>
+              <input type="password" class="form-control {% if form.password.errors %}is-invalid{% endif %}" id="password" name="password">
+              {% if form.password.errors %}
+                <div class="invalid-feedback">
+                  {{ form.password.errors}}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="mb-3">
+              <label for="confirmPassword" class="form-label">Confirm Password</label>
+              <input type="password" class="form-control {% if form.password_confirm.errors %}is-invalid{% endif %}" id="confirmPassword" name="password_confirm">
+              {% if form.password_confirm.errors %}
+                <div class="invalid-feedback">
+                  {{ form.password_confirm.errors}}
+                </div>
+              {% endif %}
+            </div>
+
+            <div class="d-grid">
+              <button type="submit" class="btn btn-primary btn-lg">Register</button>
+            </div>
+          </form>
+
+          <p class="text-center mt-3 mb-0">Already registered? <a href="{% url 'inventory_project:login' %}">Login</a></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{%endblock%}
+

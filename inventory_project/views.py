@@ -3,6 +3,7 @@ from django.shortcuts import render,redirect
 from django.http import HttpResponse
 from django.http import Http404
 import random
+from .forms import LoginForm, RegisterForm
 from inventory_project.forms import AddForm, AddReduceForm
 from .models import Category, Item, Stock_Transactions
 from django.core.paginator import Paginator
@@ -83,5 +84,43 @@ def add_reduce(request):
 
 
 def transaction(request):   
-    transactions = Stock_Transactions.objects.all()
-    return render(request, "transactions.html", {"transactions": transactions})
+    transactions = Stock_Transactions.objects.all().order_by('-Created_At')
+    #paginator
+    paginator = Paginator(transactions,5)
+    page_no = request.GET.get('page')
+    page_obj = paginator.get_page(page_no)
+    return render(request, "transaction.html", {"page_obj":page_obj})
+
+def register(request):
+    form = RegisterForm()
+    if request.method == "POST":
+        form = RegisterForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)#user data created
+            user.set_password(form.cleaned_data['password'])
+            user.save()
+            messages.success(request,"Registration Successfull, You can Login")
+            return render(request,"register.html",{"form":form,"redirect_to_login":True})
+    return render(request, "register.html",{"form":form})
+
+
+
+def login(request): 
+    form = LoginForm()
+    if request.method == "POST":
+        form = LoginForm(request.POST)
+        if form.is_valid():
+            user_name = form.cleaned_data['username']
+            password = form.cleaned_data['password']
+    return render(request,"login.html",)
+
+
+def forget_password(request): 
+    return render(request,"forget_password.html")
+
+
+
+def reset_password(request):   
+    return render(request,"reset_password.html")
+    
+
