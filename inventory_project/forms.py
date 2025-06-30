@@ -1,7 +1,15 @@
 from django import forms
 from .models import Category, Item, Stock_Transactions
 from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
 
+
+class ItemForm(forms.Form):
+      Category = forms.ModelChoiceField(queryset = Category.objects.all(),label="Select Category")
+
+      class Meta:
+          model = Category
+          fields = ["Category"]
 
 #client side validation  / field  validation
 class AddForm(forms.ModelForm):
@@ -46,13 +54,22 @@ class AddReduceForm(forms.ModelForm):
         fields = ["Name","Transaction_type","Quantity","Notes","Reference_note"]
 
 
+class CategoryForm(forms.ModelForm):
+    Name = forms.CharField(label="Category Name",max_length=30,required=True)
+    Description = forms.CharField(label="Description",max_length=100,required=False)
+
+    class Meta:
+        model = Category
+        fields = ["Name","Description"]
+        
     def clean(self):
         cleaned_data = super().clean()
-        quan = cleaned_data.get("Quantity")
-        if quan <= 0:
-            raise forms.ValidationError("Enter Positive Value.")
+        name = str(cleaned_data.get("Name"))
+        name = name.title()
+        if Category.objects.filter(Name=name).exists():
+            raise forms.ValidationError("This Item Already Exists In Inventory")
 
-        
+
 class RegisterForm(forms.ModelForm):
     username = forms.CharField(label = "Full Name", max_length=100, required=True)
     email = forms.EmailField(label = "Email address",max_length=50,required=True)
@@ -73,5 +90,36 @@ class RegisterForm(forms.ModelForm):
             raise forms.ValidationError("password doesn't match")
         
 class LoginForm(forms.Form):
-    username = forms.CharField(label="User Name",max_length=20,required=True)
-    password = forms.CharField(label="Password",max_length=20,required=True)
+    username = forms.CharField(label="UserName", max_length=20, required=True)
+    password = forms.CharField(label="Password", max_length=20, required=True)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        username = cleaned_data.get("username")
+        password = cleaned_data.get("password")
+
+        if username and password:
+            user = authenticate(username=username, password=password)
+            if user is None:
+                raise forms.ValidationError("Invalid username or password")
+            
+class Forget_Password_Form(forms.Form):
+    email = forms.EmailField(label = "Email Address", required=True)
+
+    def clean(self):
+        cleaned_data= super().clean()
+        email = cleaned_data.get("email")
+        if not User.objects.filter(email=email).exists():
+            raise forms.ValidationError("there is no registered with this email")
+        
+
+class Reset_Password_Form(forms.Form):
+    new_password = forms.CharField(label = "New_password", required = True)
+    confirm_password = forms.CharField(label = "Confirm_password", required = True)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        new_password = cleaned_data.get("new_password")
+        confirm_password = cleaned_data.get("confirm_password")
+        if new_password and confirm_password and new_password != confirm_password:
+            raise forms.ValidationError("Password doesn't match")

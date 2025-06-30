@@ -3,7 +3,7 @@ from django.db import models
 # Create your models here.
 class Category(models.Model):
     Name = models.CharField(max_length=100)
-    Description = models.TextField(blank=True)
+    Description = models.TextField(blank=True,null=True)
     Created_At = models.DateTimeField(auto_now_add=True)
 
     def __str__ (self):

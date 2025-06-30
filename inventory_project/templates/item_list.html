@@ -1,38 +1,57 @@
-{% extends 'base.html'%}
-{%block content%}
-  <div class="container mt-5">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h1 class="mb-0" style= "font-family: Georgia, serif;">Inventory Item List</h1>
-      
-    </div>
-    <!-- Responsive Table -->
-    <div class="table-responsive">
-      <table class="table table-bordered table-hover align-middle">
-        <thead>
-          <tr>
-            <th>Category</th>
-            <th>Item Name</th>
-            <th>Current Stock</th>
-          </tr>
-        </thead>
-        <tbody>
-            {%for item in page_obj%}
-          <tr>
-            <td>{{item.Category}}</td>
-            <td>{{item.Name}}</td>
-            <td>{{item.Current_Stock}}</td>
-          </tr>
-            {%endfor%}
-        </tbody>
-      </table>
-    </div>
+{% extends 'base.html' %}
+{% block content %}
+<!-- header section-->
+{% include "includes/header.html" %}
+<div class="container mt-5">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0" style="font-family: Georgia, serif;">Inventory Item List</h1>
   </div>
-  
+
+  <!-- Category Selection Form -->
+  <form method="post" class="mb-4">
+    {% csrf_token%}
+    <div class="row">
+      <div class="col-md-4">
+        <label for="category" class="form-label">Select Category:</label>
+        <select name="Category" id="category" class="form-select" >
+          <option >-- All Categories --</option>
+          {% for category in categorys %}
+            <option value="{{ category.id }}"> {{ category.Name }}</option>
+          {% endfor %}
+       </select> <br>
+      <button type="submit" class="btn btn-primary">Search</button>
+   
+      </div>
+    </div>
+  </form>
+
+  <!-- Responsive Table -->
+  <div class="table-responsive ">
+    <table class="table table-bordered table-hover align-middle " style = "text-align:center" >
+      <thead>
+        <tr>
+          <th> Category</th>
+          <th>Item Name</th>
+          <th>Current Stock</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+          <tr>
+            <td>{{ item.Category }}</td>
+            <td>{{ item.Name }}</td>
+            <td>{{ item.Current_Stock }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3" class="text-center">No items found for this category.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
   <!-- Paginator -->
-   {% include 'includes/paginator.html'%}
-{%endblock%}
-  
-
-
-
-
+  {% include 'includes/paginator.html' %}
+</div>
+{% endblock %}

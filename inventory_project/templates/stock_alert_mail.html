@@ -1,0 +1,10 @@
+{% autoescape off %}
+Hello {{ user.username }},
+
+You have received this email because the stock of the following items is below the minimum threshold:
+
+{{ item_name }}: Current stock is {{ item_Quantity }} (Minimum threshold is {{ item_minimum_stock }})
+
+Please take necessary action to replenish the stock.
+Thank you for your attention.
+{% endautoescape %}
