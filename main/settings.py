@@ -59,8 +59,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    "main.middleware.redirectauthenticatedusermiddleware",
-    "main.middleware.restrictunauthenticatedusermiddleware",
 ]
 
 ROOT_URLCONF = 'main.urls'
@@ -91,7 +89,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'inventory',
         'USER': 'postgres',
-        'PASSWORD' : 'Rohith@181001',
+        'PASSWORD' : '1234',
         'HOST' : 'localhost',
         'PORT' : '5432',
     }
@@ -142,12 +140,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 #email settings
 
-DEFAULT_FROM_EMAIL = "mrohith481@gmail.com"
+DEFAULT_FROM_EMAIL = "bhaveshvinayaraj2003@gmail.com"
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'mrohith481@gmail.com'
-EMAIL_HOST_PASSWORD = "caxlpqtchqvlnpan"
+EMAIL_HOST_USER = 'bhaveshvinayaraj2003@gmail.com'
+EMAIL_HOST_PASSWORD = "brll wazd jpyi shza"
 
 

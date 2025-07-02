@@ -11,25 +11,34 @@
        
 
           <li class="nav-item">
-            <a class="nav-link" href="{% url "inventory_project:item_list"%}">Home</a>
+            <a class="nav-link" href="{% url "inventory_project:dashboard"%}">Home</a>
           </li>
           
           <li class="nav-item">
             <a class="nav-link" href="{% url "inventory_project:add_category"%}"> Add Category</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="{% url "inventory_project:add_new_item"%}">Add Item</a>
+            <a class="nav-link" href="{% url "inventory_project:add_item"%}">Add Item</a>
           </li>
           <li class="nav-item">
-            <a class="nav-link" href="{% url "inventory_project:add_reduce"%}">Add/Reduce Stock</a>
+            <a class="nav-link" href="{% url "inventory_project:add_reduce_item"%}">Add/Reduce Stock</a>
           </li>
           <li class="nav-item">
             <a class="nav-link" href="{% url "inventory_project:transaction"%}"> Transaction</a>
           </li>
            <li class="nav-item">
-            <a class="nav-link" href="{% url "inventory_project:logout"%}"> Logout</a>
+            <a class="nav-link" href="{% url "inventory_project:logout"%}" id="logout-btn"> Logout</a>
           </li>
         </ul>
       </div>
     </div>
   </nav>
+
+  <script>
+  document.getElementById("logout-btn").addEventListener("click", function(e) {
+    e.preventDefault();
+    localStorage.removeItem("access");
+    localStorage.removeItem("refresh");
+    window.location.href = "{% url 'inventory_project:logout' %}";
+  });
+</script>

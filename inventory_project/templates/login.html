@@ -1,34 +1,10 @@
-{% extends "base.html"%}
+{% extends "base.html" %}
 {% block content %}
- 
-{% if messages %}
-  <div aria-live="polite" aria-atomic="true" class="position-relative">
-    <div class="toast-container position-fixed bottom-0 end-0 p-3">
-      {% for message in messages %}
-        <div class="toast align-items-center text-bg-{%if message.tags == "success"%}success{%else%}danger{%endif%} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-          <div class="d-flex">
-            <div class="toast-body">
-              {{ message }}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-          </div>
-        </div>
-      {% endfor %}
-    </div>
-  </div>
-   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      document.querySelectorAll('.toast').forEach(function(toastEl) {
-        new bootstrap.Toast(toastEl).show();
-      });
-      {% if redirect_to_item_list %}
-        setTimeout(function() {
-          window.location.href = "{% url 'inventory_project:item_list' %}";
-        }, 3000);
-      {% endif %}
-    });
-  </script>
-{% endif %}
+
+<!-- Toast Container -->
+<div aria-live="polite" aria-atomic="true" class="position-relative">
+  <div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+</div>
 
 <div class="container py-5">
   <div class="row justify-content-center">
@@ -39,36 +15,16 @@
         </div>
         <div class="card-body p-4">
 
-           <!-- Alert for non-field errors -->
-          {% if form.non_field_errors %}
-            <div class="alert alert-danger alert-dismissible fade show">
-              {% for error in form.non_field_errors %}
-                <div>{{ error }}</div>
-              {% endfor %}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-          {% endif %}
-
-          <form method = "post">
+          <form id="login-form">
             {% csrf_token %}
             <div class="mb-3">
               <label for="username" class="form-label">User Name</label>
-              <input type="text" class="form-control {% if form.username.errors %}is-invalid{% endif %}" id="username" name="username" value = "{{form.username.value | default:""}}" >
-               {% if form.username.errors %}
-                <div class="invalid-feedback">
-                  {{ form.username.errors }}
-                </div>
-              {% endif %}
+              <input type="text" class="form-control" id="username" name="username" required>
             </div>
 
             <div class="mb-3">
               <label for="password" class="form-label">Password</label>
-              <input type="password" class="form-control {% if form.password.errors %}is-invalid{% endif %}" id="password"  name="password" value = "{{form.password.value | default:""}}" >
-               {% if form.password.errors%}
-                <div class="invalid-feedback">
-                  {{ form.password.errors }}
-                </div>
-              {% endif %}
+              <input type="password" class="form-control" id="password" name="password" required>
             </div>
 
             <div class="d-grid">
@@ -77,12 +33,64 @@
           </form>
 
           <div class="text-center mt-3">
-            <a href="{% url "inventory_project:forget_password"%}">Forgot password?</a>
+            <a href="{% url 'inventory_project:forget_password' %}">Forgot password?</a>
           </div>
-          <p class="text-center mt-2 mb-0">Don't have an account? <a href="{% url "inventory_project:register"%}">Register</a></p>
+          <p class="text-center mt-2 mb-0">Don't have an account?
+            <a href="{% url 'inventory_project:register' %}">Register</a>
+          </p>
         </div>
       </div>
     </div>
   </div>
 </div>
-{% endblock%}
+
+<!-- jQuery & Bootstrap Toast Script -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+  $(document).ready(function () {
+    $('#login-form').submit(function (e) {
+      e.preventDefault();
+
+      const username = $('#username').val();
+      const password = $('#password').val();
+
+      $.ajax({
+        url: '/api/token/',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ username: username, password: password }),
+        success: function (data) {
+          localStorage.setItem('access', data.access);
+          localStorage.setItem('refresh', data.refresh);
+          showToast('Login successful!', 'success');
+
+          setTimeout(function () {
+            window.location.href = "{% url 'inventory_project:dashboard' %}";
+          }, 2000);
+        },
+        error: function (xhr) {
+          let errMsg = xhr.responseJSON?.detail || "Invalid credentials!";
+          showToast(errMsg, 'danger');
+        }
+      });
+    });
+
+    function showToast(message, type) {
+      const toastHTML = `
+        <div class="toast align-items-center text-bg-${type} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+        </div>
+      `;
+      const $container = $('.toast-container');
+      $container.html(toastHTML);
+      const toastEl = $container.find('.toast')[0];
+      const toast = new bootstrap.Toast(toastEl);
+      toast.show();
+    }
+  });
+</script>
+
+{% endblock %}

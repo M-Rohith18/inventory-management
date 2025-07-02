@@ -1,11 +1,8 @@
-from itertools import count
 from django.contrib import messages
 from django.shortcuts import render,redirect
 from django.http import HttpResponse
-from django.http import Http404
-import random ,csv
-from .forms import CategoryForm, Forget_Password_Form, LoginForm,  RegisterForm, Reset_Password_Form
-from inventory_project.forms import AddForm, AddReduceForm,ItemForm
+import csv
+from .forms import  Forget_Password_Form,  RegisterForm, Reset_Password_Form
 from django.contrib.auth import authenticate,login as auth_login,logout as auth_logout
 from .models import Category, Item, Stock_Transactions
 from django.core.paginator import Paginator
@@ -17,7 +14,12 @@ from django.utils.http import urlsafe_base64_encode,urlsafe_base64_decode
 from django.utils.encoding import force_bytes
 from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.auth.models import User
-
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from .serializer import AddItemSerializer, CategoryAddSerializer, CategoryListSerializer, ItemListSerializer, ItemSerializer, StockTransactionListSerializer
+import jwt
+from django.conf import settings
 # Create your views here.
 
 def register(request):
@@ -31,22 +33,6 @@ def register(request):
             messages.success(request,"Registration Successfull, You can Login")
             return render(request,"register.html",{"form":form,"redirect_to_login":True})
     return render(request, "register.html",{"form":form})
-
-
-def login(request):
-    form = LoginForm()
-    if request.method == "POST":
-        form = LoginForm(request.POST)
-        if form.is_valid():
-            username = form.cleaned_data['username']
-            password = form.cleaned_data['password']
-            user = authenticate(username=username, password=password)
-            if user is not None:
-                auth_login(request, user)
-                messages.success(request, "Login Successful")
-                return render(request,"login.html",{"form":form,"redirect_to_item_list":True})
-    return render(request,"login.html",{"form":form})
-
 
 def forget_password(request):
     form = Forget_Password_Form()
@@ -65,14 +51,12 @@ def forget_password(request):
             messages.success(request,"email sent successfully")
     return render(request,"forget_password.html",{"form":form,"redirect":True})
 
-
 def reset_password(request,uidb64,token):
     form = Reset_Password_Form()
     if request.method == "POST":
         form = Reset_Password_Form(request.POST)
         if form.is_valid():
             new_password = form.cleaned_data["new_password"]
-
             try:
                 uid = urlsafe_base64_decode(uidb64)
                 user = User.objects.get(id=uid)
@@ -89,122 +73,217 @@ def logout(request):
     auth_logout(request)
     return redirect("inventory_project:login")
 
+def login(request):
+    return render(request,"login.html")
 
-def item_list(request):
-    categorys = Category.objects.all()
-    items = Item.objects.all()
-    form = ItemForm()
-    if request.method == "POST":
-        form = ItemForm(request.POST)
-        if form.is_valid():
-            category_id = request.POST.get('Category')
-            items = Item.objects.select_related('category_id')
-            items = Item.objects.filter(Category = category_id)
-            return render(request,"item_list.html",{"categorys":categorys,"form":form,"items":items})
-            # paginator
-            # paginator = Paginator(items,5)
-            # page_no = request.GET.get('page')
-            # page_obj = paginator.get_page(page_no)
-    return render(request,"item_list.html",{"categorys":categorys,"form":form})
+def dashboard(request):
+    return render(request,"dashboard.html")
+
+class CategoryListAPIView(APIView):
+    def get(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        token = auth_header.split(' ')[1]
+        try:
+            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            user_id = decoded_token.get('user_id')
+            user = User.objects.get(id=user_id)
+        except jwt.ExpiredSignatureError:
+            return Response({'detail': 'Token has expired'}, status=status.HTTP_401_UNAUTHORIZED)
+        except jwt.DecodeError:
+            return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        categories = Category.objects.filter(user=user).all()
+        serializer = CategoryListSerializer(categories, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
+class ItemListAPIView(APIView):
+    def get(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        token = auth_header.split(' ')[1]
+        try:
+            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            user_id = decoded_token.get('user_id')
+            user = User.objects.get(id=user_id)
+        except jwt.ExpiredSignatureError:
+            return Response({'detail': 'Token has expired'}, status=status.HTTP_401_UNAUTHORIZED)
+        except jwt.DecodeError:
+            return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        category_id = request.GET.get('category_id')
+        if not category_id:
+            return Response({'detail': 'Category ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+        items = Item.objects.filter(user=user, category_id=category_id)
+        serializer = ItemListSerializer(items, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 def add_category(request):
-    form = CategoryForm()
-    if request.method == "POST":
-        form = CategoryForm(request.POST)
-        if form.is_valid():
-            name = str(form.cleaned_data["Name"]).title()
-            description = form.cleaned_data["Description"] or None
-            Category.objects.create(Name=name, Description=description)
-            messages.success(request, "Category added successfully!")
-            return render(request, "category.html",{"redirect_to_home":True})
-    return render(request,"category.html",{"form":form})
+    return render(request,"category.html")
+
+class AddCategoryAPIView(APIView):
+    def post(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        token = auth_header.split(' ')[1]
+        try:
+            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            user_id = decoded_token.get('user_id')
+            user = User.objects.get(id=user_id)
+        except jwt.ExpiredSignatureError:
+            return Response({'detail': 'Token has expired'}, status=status.HTTP_401_UNAUTHORIZED)
+        except jwt.DecodeError:
+            return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = CategoryAddSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(user=user)
+            return Response({'message': 'Category added successfully'}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-def add_new_item(request):
-    categories = Category.objects.all()
-    form = AddForm()
-    if request.method == "POST":
-        form = AddForm(request.POST)
-        if form.is_valid():
-            item = form.save(commit = False)
-            description = form.cleaned_data["Description"] or None
-            current_stock = form.cleaned_data["Current_Stock"] or 0
-            sku = ""
-            category = str(form.cleaned_data["Category"])
-            item_name = str(form.cleaned_data["Name"])
-            sku += category[0:2].lower()+item_name[0:2].lower()
-            digit = str(random.randint(1000,999999))
-            sku += digit
-            item.Name = item_name.title()
-            item.Sku = sku
-            item.Description = description
-            item.Current_Stock = current_stock
-            item.save()
-            messages.success(request,"Item Added To Inventory Successfully")
-            return render(request,"add_item.html",{"form":form,"categories":categories,"redirect_to_home":True})
-    return render(request,"add_item.html",{"form":form,"categories":categories})
+def add_item(request):
+    return render(request,"add_item.html")
 
+class AddItemAPIView(APIView):
+    def post(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return Response({'detail': 'Missing or invalid token'}, status=401)
+        token = auth_header.split(' ')[1]
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            user = User.objects.get(id=payload.get('user_id'))
+        except jwt.ExpiredSignatureError:
+            return Response({'detail': 'Token expired'}, status=401)
+        except jwt.DecodeError:
+            return Response({'detail': 'Token invalid'}, status=401)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found'}, status=404)
+        category_id = request.data.get('category_id')
+        if not category_id:
+            return Response({'detail': 'Category is required'}, status=400)
+        try:
+            category = Category.objects.get(id=category_id, user=user)
+        except Category.DoesNotExist:
+            return Response({'detail': 'Invalid category'}, status=400)
+        item_count = Item.objects.filter(user=user).count() + 1
+        sku = f"ITEM-{item_count:03d}"
+        serializer = AddItemSerializer(data=request.data)
+        if serializer.is_valid():
+            Item.objects.create(
+                user=user,
+                category=category,
+                sku=sku,
+                **serializer.validated_data
+            )
+            return Response({'message': 'Item added successfully'}, status=201)
+        return Response(serializer.errors, status=400)
 
+def add_reduce_item(request): 
+    return render(request,"add_reduce.html")
 
-
-def add_reduce(request): 
-    items = Item.objects.all().order_by("Name")
-    form = AddReduceForm()
-    if request.method == "POST":
-        form = AddReduceForm(request.POST)
-        if form.is_valid():
-            item_id = request.POST['Name']
-            transaction_type = str(request.POST['Transaction_type']).upper()
-            item = Item.objects.get(pk = item_id)
-            current_stock = item.Current_Stock
-            quantity = form.cleaned_data['Quantity']
-            if transaction_type == 'IN':
-                item.Current_Stock += quantity
-                messages.success(request,"Quantity Added Succesffuly")
-                item.save()
-                transaction = form.save(commit = False)
-                Ref_note = random.randint(10000000,999999999)
-                transaction.Type = transaction_type
-                transaction.Reference_note = Ref_note
-                transaction.Notes = form.cleaned_data["Notes"] or None
-                transaction.save()
-                if item.Current_Stock < 20:
-                        user_email = "mrohith481@gmail.com"
-                        subject = "Low Stock Alert Mail"
-                        message = render_to_string('stock_alert_mail.html', {'item_name': item.Name, 'item_Quantity': item.Current_Stock, 'item_minimum_stock': 20, 'user': request.user})
-                        send_mail(subject, message, user_email, [request.user.email])
-                return render(request,"add_reduce.html",{"form":form,"items":items,"redirect_to_transaction":True})
-            elif transaction_type == 'OUT':
-                if current_stock > quantity:
-                    item.Current_Stock -= quantity
-                    messages.success(request,"Quantity Reduced Succesfully")
-                    item.save()
-                    transaction = form.save(commit = False)
-                    Ref_note = random.randint(10000000,999999999)
-                    transaction.Reference_note = Ref_note
-                    transaction.Type = transaction_type
-                    transaction.Notes = form.cleaned_data["Notes"] or None
-                    transaction.save()  
-                    if item.Current_Stock < 20:
-                        user_email = "mrohith481@gmail.com"
-                        subject = "Low Stock Alert Mail"
-                        message = render_to_string('stock_alert_mail.html', {'item_name': item.Name, 'item_Quantity': item.Current_Stock, 'item_minimum_stock': 20, 'user': request.user})
-                        send_mail(subject, message, user_email, [request.user.email])
-                    return render(request,"add_reduce.html",{"form":form,"items":items,"redirect_to_transaction":True})
-                else:
-                    messages.error(request,"Current Stock is Less Than Quantity.")
-            else:
-                messages.error(request,"Invalid Transaction Type")
-    return render(request,"add_reduce.html",{"form":form,"items":items})
-
-
+class StockTransactionAPIView(APIView):
+    def post(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return Response({'detail': 'Missing or invalid token'}, status=401)
+        token = auth_header.split(' ')[1]
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            user = User.objects.get(id=payload.get('user_id'))
+        except jwt.ExpiredSignatureError:
+            return Response({'detail': 'Token expired'}, status=401)
+        except jwt.DecodeError:
+            return Response({'detail': 'Token invalid'}, status=401)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found'}, status=404)
+        item_id = request.data.get('item')
+        try:
+            item = Item.objects.get(id=item_id, user=user)
+        except Item.DoesNotExist:
+            return Response({'detail': 'Item not found or not yours'}, status=400)
+        trans_type = request.data.get('type')
+        quantity = int(request.data.get('quantity', 0))
+        notes = request.data.get('notes', '')
+        if trans_type == 'OUT' and quantity > item.current_stock:
+            return Response({'detail': 'Not enough stock to reduce'}, status=400)
+        if trans_type == 'IN':
+            item.current_stock += quantity
+        elif trans_type == 'OUT':
+            item.current_stock -= quantity
+        item.save()
+        txn = Stock_Transactions.objects.create(
+            name=item,
+            user=user,
+            type=trans_type,
+            quantity=quantity,
+            reference_note=0, 
+            notes=notes
+        )
+        txn.reference_note = txn.id
+        txn.save()
+        return Response({
+            'message': 'Stock updated successfully',
+            'reference_note': txn.reference_note
+        }, status=201)
+    
+class ItemListAPIView(APIView):
+    def get(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        token = auth_header.split(' ')[1]
+        try:
+            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            user_id = decoded_token.get('user_id')
+            user = User.objects.get(id=user_id)
+        except jwt.ExpiredSignatureError:
+            return Response({'detail': 'Token has expired'}, status=status.HTTP_401_UNAUTHORIZED)
+        except jwt.DecodeError:
+            return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        category_id = request.GET.get('category_id')
+        if category_id:
+            items = Item.objects.filter(user=user, category_id=category_id)
+        else:
+            items = Item.objects.filter(user=user)
+        serializer = ItemSerializer(items, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    
 def transaction(request):   
-    transactions = Stock_Transactions.objects.all().order_by('-Created_At')
-    #paginator
-    paginator = Paginator(transactions,5)
-    page_no = request.GET.get('page')
-    page_obj = paginator.get_page(page_no)
-    return render(request, "transaction.html", {"page_obj":page_obj})
+    return render(request, "transaction.html")
+
+class StockTransactionListAPIView(APIView):
+    def get(self, request):
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        token = auth_header.split(' ')[1]
+        try:
+            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            user_id = decoded_token.get('user_id')
+            user = User.objects.get(id=user_id)
+        except jwt.ExpiredSignatureError:
+            return Response({'detail': 'Token has expired'}, status=status.HTTP_401_UNAUTHORIZED)
+        except jwt.DecodeError:
+            return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+        except User.DoesNotExist:
+            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        transactions = Stock_Transactions.objects.filter(user=user)
+        serializer = StockTransactionListSerializer(transactions, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 def download_reports(request):
     response = HttpResponse(content_type='text/csv')

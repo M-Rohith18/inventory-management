@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+{% block content %}
+<!-- Header -->
+{% include "includes/header.html" %}
+
+<div class="container mt-5">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0" style="font-family: Georgia, serif;">Inventory Item List</h1>
+  </div>
+
+  <!-- Category Filter Form -->
+  <div class="row">
+    <div class="col-md-4">
+      <label for="category" class="form-label">Select Category:</label>
+      <select id="category" class="form-select">
+        <option value="">-- All Categories --</option>
+      </select>
+      <br>
+      <button id="search-btn" class="btn btn-primary">Search</button>
+    </div>
+  </div>
+
+  <!-- Items Table -->
+  <div class="table-responsive mt-4">
+    <table class="table table-bordered table-hover align-middle text-center">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Item Name</th>
+          <th>Current Stock</th>
+        </tr>
+      </thead>
+      <tbody id="item-table-body">
+        <tr><td colspan="3">No items loaded yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- jQuery & AJAX logic -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+  const token = localStorage.getItem('access');
+
+  if (!token) {
+    alert('You must be logged in to view this page.');
+    window.location.href = "/login/";
+  }
+
+  $(document).ready(function () {
+    // Load categories into dropdown
+    $.ajax({
+      url: '/api/categories/',
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + token
+      },
+      success: function (data) {
+        data.forEach(function (category) {
+          $('#category').append(
+            $('<option>', {
+              value: category.id,
+              text: category.name
+            })
+          );
+        });
+      },
+      error: function () {
+        alert('Error loading categories. Please re-login.');
+        localStorage.removeItem('access');
+        window.location.href = "/login/";
+      }
+    });
+
+    // On Search button click
+    $('#search-btn').on('click', function () {
+      const selectedCategoryId = $('#category').val();
+
+      $.ajax({
+        url: '/api/items/',  // You'll create this API next
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer ' + token
+        },
+        data: {
+          category_id: selectedCategoryId
+        },
+        success: function (items) {
+          const tableBody = $('#item-table-body');
+          tableBody.empty();
+
+          if (items.length === 0) {
+            tableBody.append('<tr><td colspan="3">No items found for this category.</td></tr>');
+          } else {
+            items.forEach(function (item) {
+              tableBody.append(`
+                <tr>
+                  <td>${item.category}</td>
+                  <td>${item.name}</td>
+                  <td>${item.current_stock}</td>
+                </tr>
+              `);
+            });
+          }
+        },
+        error: function () {
+          alert('Error fetching items. Please try again.');
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

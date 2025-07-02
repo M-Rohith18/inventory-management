@@ -1,88 +1,96 @@
 {% extends "base.html" %}
 {% block content %}
-<!-- header section-->
 {% include "includes/header.html" %}
-{% if messages %}
-  <div aria-live="polite" aria-atomic="true" class="position-relative">
-    <div class="toast-container position-fixed bottom-0 end-0 p-3">
-      {% for message in messages %}
-        <div class="toast align-items-center text-bg-{%if message.tags == "success"%}success{%else%}danger{%endif%} border-0" role="alert" aria-live="assertive" aria-atomic="true">
-          <div class="d-flex">
-            <div class="toast-body">
-              {{ message }}
-            </div>
-            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-          </div>
-        </div>
-      {% endfor %}
-      
-    </div>
-  </div>
-   <script>
-    document.addEventListener('DOMContentLoaded', function() {
-      document.querySelectorAll('.toast').forEach(function(toastEl) {
-        new bootstrap.Toast(toastEl).show();
-      });
-      {% if redirect_to_home %}
-        setTimeout(function() {
-          window.location.href = "{% url 'inventory_project:item_list' %}";
-        }, 3000);
-      {% endif %}
-    });
-  </script>
-{% endif %}
 
-<div class="container mt-5">
+<div class="container mt-5" id="category-container" style="display: none;">
   <div class="row justify-content-center">
     <div class="col-md-6">
       <div class="card shadow-sm border-0 rounded-4">
         <div class="card-header bg-primary text-white rounded-top-4">
           <h4 class="mb-0 text-center py-2">Add New Category</h4>
         </div>
-        <!-- Alert for non-field errors -->
-          {% if form.non_field_errors %}
-            <div class="alert alert-danger alert-dismissible fade show">
-              {% for error in form.non_field_errors %}
-                <div>{{ error }}</div>
-              {% endfor %}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-          {% endif %}
 
         <div class="card-body p-4">
-          <form method="POST" >
-            {% csrf_token %}
-            <!-- Category Name -->
+          <form id="add-category-form">
             <div class="mb-3">
               <label for="categoryName" class="form-label">Category Name</label>
-              <input type="text" class="form-control {% if form.Name.errors %}is-invalid{% endif %}" id="categoryName" name="Name" placeholder="Enter category name" >
-              {% if form.Name.errors %}
-                <div class="invalid-feedback">
-                  {{ form.Name.errors }}
-                </div>
-              {% endif %}
+              <input type="text" class="form-control" id="categoryName" name="name" placeholder="Enter category name">
             </div>
 
-            <!-- Optional Description -->
             <div class="mb-3">
               <label for="description" class="form-label">Description (optional)</label>
-              <textarea class="form-control {% if form.Description.errors %}is-invalid{% endif %}" id="description" name="Description" rows="3" placeholder="Add details or notes"></textarea>
-              {% if form.Description.errors %}
-                <div class="invalid-feedback">
-                  {{ form.Description.errors }}
-                </div>
-              {% endif %}
+              <textarea class="form-control" id="description" name="description" rows="3" placeholder="Add details or notes"></textarea>
             </div>
 
-            <!-- Submit Button -->
             <div class="d-grid">
               <button type="submit" class="btn btn-primary">Add Category</button>
             </div>
           </form>
+
+          <div id="response-message" class="mt-3 text-center fw-semibold"></div>
         </div>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Message if not logged in -->
+<div class="container mt-5" id="unauthorized-message" style="display: none;">
+  <div class="alert alert-danger text-center">
+    You are not logged in. Please <a href="{% url 'inventory_project:login' %}">login</a> to add a category.
+  </div>
+</div>
+
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+  $(document).ready(function () {
+    const token = localStorage.getItem('access');
+
+    if (!token) {
+      alert('You must be logged in to add a category.');
+      window.location.href = "/login/";
+      
+    } else {
+      // Token found, show form
+      $('#category-container').show();
+    }
+
+    $('#add-category-form').on('submit', function (e) {
+      e.preventDefault();
+
+      const name = $('#categoryName').val();
+      const description = $('#description').val();
+
+      $.ajax({
+        url: '/api/add-category/',
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + token,
+          'Content-Type': 'application/json',
+        },
+        data: JSON.stringify({
+          name: name,
+          description: description
+        }),
+        success: function (res) {
+          $('#response-message').text(res.message).removeClass('text-danger').addClass('text-success');
+          $('#add-category-form')[0].reset();
+        },
+        error: function (xhr) {
+          let msg = "";
+          if (xhr.status === 401) {
+            msg = "Invalid token. Please login again.";
+          } else if (xhr.responseJSON) {
+            for (let key in xhr.responseJSON) {
+              msg += `${key}: ${xhr.responseJSON[key]} `;
+            }
+          }
+          $('#response-message').text(msg).removeClass('text-success').addClass('text-danger');
+        }
+      });
+    });
+  });
+</script>
 {% endblock %}
