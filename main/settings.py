@@ -87,9 +87,9 @@ WSGI_APPLICATION = 'main.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'inventory',
+        'NAME': 'inventory_project',
         'USER': 'postgres',
-        'PASSWORD' : '1234',
+        'PASSWORD' : 'Rohith@181001',
         'HOST' : 'localhost',
         'PORT' : '5432',
     }
@@ -140,12 +140,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 #email settings
 
-DEFAULT_FROM_EMAIL = "bhaveshvinayaraj2003@gmail.com"
+DEFAULT_FROM_EMAIL = "mrohith481@gmail.com"
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'bhaveshvinayaraj2003@gmail.com'
-EMAIL_HOST_PASSWORD = "brll wazd jpyi shza"
+EMAIL_HOST_USER = 'mrohith481@gmail.com'
+EMAIL_HOST_PASSWORD = "caxlpqtchqvlnpan"
 
+from datetime import timedelta
 
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),  
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1), 
+}

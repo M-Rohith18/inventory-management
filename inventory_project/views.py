@@ -20,6 +20,7 @@ from rest_framework import status
 from .serializer import AddItemSerializer, CategoryAddSerializer, CategoryListSerializer, ItemListSerializer, ItemSerializer, StockTransactionListSerializer
 import jwt
 from django.conf import settings
+
 # Create your views here.
 
 def register(request):
@@ -132,6 +133,7 @@ class AddCategoryAPIView(APIView):
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
             return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
+
         token = auth_header.split(' ')[1]
         try:
             decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
@@ -143,13 +145,14 @@ class AddCategoryAPIView(APIView):
             return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
         except User.DoesNotExist:
             return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        serializer = CategoryAddSerializer(data=request.data)
+
+        serializer = CategoryAddSerializer(data=request.data, context={'user': user})
         if serializer.is_valid():
             serializer.save(user=user)
             return Response({'message': 'Category added successfully'}, status=status.HTTP_201_CREATED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 def add_item(request):
@@ -199,6 +202,7 @@ class StockTransactionAPIView(APIView):
         if not auth_header or not auth_header.startswith('Bearer '):
             return Response({'detail': 'Missing or invalid token'}, status=401)
         token = auth_header.split(' ')[1]
+
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
             user = User.objects.get(id=payload.get('user_id'))
@@ -209,6 +213,7 @@ class StockTransactionAPIView(APIView):
         except User.DoesNotExist:
             return Response({'detail': 'User not found'}, status=404)
         item_id = request.data.get('item')
+
         try:
             item = Item.objects.get(id=item_id, user=user)
         except Item.DoesNotExist:
@@ -216,13 +221,21 @@ class StockTransactionAPIView(APIView):
         trans_type = request.data.get('type')
         quantity = int(request.data.get('quantity', 0))
         notes = request.data.get('notes', '')
+
         if trans_type == 'OUT' and quantity > item.current_stock:
             return Response({'detail': 'Not enough stock to reduce'}, status=400)
         if trans_type == 'IN':
             item.current_stock += quantity
-        elif trans_type == 'OUT':
+        elif trans_type == 'OUT':   
             item.current_stock -= quantity
         item.save()
+
+        if item.current_stock < 20:
+            user_email = "mrohith481@gmail.com"
+            subject = "Low Stock Alert Mail"
+            message = render_to_string('stock_alert_mail.html', {'item_name': item.name, 'item_Quantity': item.current_stock, 'item_minimum_stock': 20, 'user': request.user})
+            send_mail(subject, message, user_email, [user.email])
+
         txn = Stock_Transactions.objects.create(
             name=item,
             user=user,
@@ -281,7 +294,7 @@ class StockTransactionListAPIView(APIView):
             return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
         except User.DoesNotExist:
             return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-        transactions = Stock_Transactions.objects.filter(user=user)
+        transactions = Stock_Transactions.objects.filter(user=user).order_by('-created_at')
         serializer = StockTransactionListSerializer(transactions, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -294,37 +307,36 @@ def download_reports(request):
     writer.writerow(['Item', 'Type', 'Quantity', 'Reference', 'Date'])
 
     # Transaction rows
-    transactions = Stock_Transactions.objects.select_related('Name')
+    transactions = Stock_Transactions.objects.select_related('name')
     for tx in transactions:
         writer.writerow([
-            tx.Name.Name,
-            tx.Type,
-            tx.Quantity,
-            tx.Reference_note,
-            tx.Created_At,
+            tx.name.name,
+            tx.type,
+            tx.quantity,
+            tx.created_at,
         ])
 
     writer.writerow([])
     writer.writerow(['--- Summary ---'])
 
     # Aggregates for 'Add' transactions
-    add_qs = Stock_Transactions.objects.filter(Type__iexact='IN')
+    add_qs = Stock_Transactions.objects.filter(type='IN')
     add_stats = add_qs.aggregate(
-        total=Sum('Quantity'),
+        total=Sum('quantity'),
         count=Count('id'),
-        avg=Avg('Quantity'),
-        max_qty=Max('Quantity'),
-        min_qty=Min('Quantity')
+        avg=Avg('quantity'),
+        max_qty=Max('quantity'),
+        min_qty=Min('quantity')
     )
 
     # Aggregates for 'Reduce' transactions
-    reduce_qs = Stock_Transactions.objects.filter(Type__iexact='OUT')
+    reduce_qs = Stock_Transactions.objects.filter(type='OUT')
     reduce_stats = reduce_qs.aggregate(
-        total=Sum('Quantity'),
+        total=Sum('quantity'),
         count=Count('id'),
-        avg=Avg('Quantity'),
-        max_qty=Max('Quantity'),
-        min_qty=Min('Quantity')
+        avg=Avg('quantity'),
+        max_qty=Max('quantity'),
+        min_qty=Min('quantity')
     )
 
     # Find items for max/min quantities
@@ -332,8 +344,8 @@ def download_reports(request):
         val = stats[key]
         if val is None:
             return 'N/A'
-        item = qs.filter(Quantity=val).select_related('Name').first()
-        return f"{val} (Item: {item.Name.Name})" if item else f"{val} (Item: N/A)"
+        item = qs.filter(quantity=val).select_related('name').first()
+        return f"{val} (Item: {item.name.name})" if item else f"{val} (Item: N/A)"
 
 
 

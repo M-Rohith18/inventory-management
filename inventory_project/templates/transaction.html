@@ -22,7 +22,6 @@
                   <th>Item</th>
                   <th>Type</th>
                   <th>Quantity</th>
-                  <th>Reference</th>
                   <th>Date</th>
                 </tr>
               </thead>
@@ -71,7 +70,6 @@
                 <td>${txn.item}</td>
                 <td>${typeBadge}</td>
                 <td>${txn.quantity}</td>
-                <td>${txn.reference_note ?? '—'}</td>
                 <td>${new Date(txn.created_at).toISOString().slice(0, 10)}</td>
               </tr>
             `;

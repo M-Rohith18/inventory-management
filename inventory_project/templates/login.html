@@ -16,15 +16,15 @@
         <div class="card-body p-4">
 
           <form id="login-form">
-            {% csrf_token %}
+            
             <div class="mb-3">
               <label for="username" class="form-label">User Name</label>
-              <input type="text" class="form-control" id="username" name="username" required>
+              <input type="text" class="form-control" id="username" name="username" >
             </div>
 
             <div class="mb-3">
               <label for="password" class="form-label">Password</label>
-              <input type="password" class="form-control" id="password" name="password" required>
+              <input type="password" class="form-control" id="password" name="password" >
             </div>
 
             <div class="d-grid">
@@ -51,6 +51,10 @@
     $('#login-form').submit(function (e) {
       e.preventDefault();
 
+      // Clear previous validation feedback
+      $('#username, #password').removeClass('is-invalid');
+      $('.invalid-feedback').remove();
+
       const username = $('#username').val();
       const password = $('#password').val();
 
@@ -66,11 +70,29 @@
 
           setTimeout(function () {
             window.location.href = "{% url 'inventory_project:dashboard' %}";
-          }, 2000);
+          }, 1000);
         },
         error: function (xhr) {
-          let errMsg = xhr.responseJSON?.detail || "Invalid credentials!";
-          showToast(errMsg, 'danger');
+          const errors = xhr.responseJSON || {};
+          let shownFieldError = false;
+
+          if (errors.username) {
+            $('#username').addClass('is-invalid');
+            $('#username').after(`<div class="invalid-feedback">${errors.username}</div>`);
+            shownFieldError = true;
+          }
+
+          if (errors.password) {
+            $('#password').addClass('is-invalid');
+            $('#password').after(`<div class="invalid-feedback">${errors.password}</div>`);
+            shownFieldError = true;
+          }
+
+          if (errors.non_field_errors) {
+            showToast(errors.non_field_errors, 'danger');
+          } else if (!shownFieldError) {
+            showToast("Invalid credentials. Please try again.", 'danger');
+          }
         }
       });
     });

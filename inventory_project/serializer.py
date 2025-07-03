@@ -1,6 +1,21 @@
 from rest_framework import serializers
 from .models import Category, Item, Stock_Transactions
 
+from rest_framework import serializers
+from .models import Category
+
+class CategoryAddSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ['name', 'description']
+
+    def validate_name(self, value):
+        user = self.context('user')
+        if Category.objects.filter(name__iexact=value.strip(), user=user).exists():
+            raise serializers.ValidationError("Category with this name already exists.")
+        return value.strip()
+
+
 class CategoryAddSerializer(serializers.ModelSerializer):
     class Meta:
         model = Category

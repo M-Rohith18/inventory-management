@@ -2,6 +2,12 @@
 {% block content %}
 {% include "includes/header.html" %}
 
+<!-- ✅ Toast Container -->
+<div aria-live="polite" aria-atomic="true" class="position-relative">
+  <div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+</div>
+
+<!-- 🔐 Protected Form -->
 <div class="container mt-5" id="category-container" style="display: none;">
   <div class="row justify-content-center">
     <div class="col-md-6">
@@ -9,56 +15,62 @@
         <div class="card-header bg-primary text-white rounded-top-4">
           <h4 class="mb-0 text-center py-2">Add New Category</h4>
         </div>
-
         <div class="card-body p-4">
-          <form id="add-category-form">
+
+          <!-- 🔴 General form-level error -->
+          <div id="form-error" class="alert alert-danger d-none"></div>
+
+          <form id="add-category-form" novalidate>
             <div class="mb-3">
               <label for="categoryName" class="form-label">Category Name</label>
               <input type="text" class="form-control" id="categoryName" name="name" placeholder="Enter category name">
+              <div class="invalid-feedback" id="categoryName-error"></div>
             </div>
 
             <div class="mb-3">
               <label for="description" class="form-label">Description (optional)</label>
               <textarea class="form-control" id="description" name="description" rows="3" placeholder="Add details or notes"></textarea>
+              <div class="invalid-feedback" id="description-error"></div>
             </div>
 
             <div class="d-grid">
               <button type="submit" class="btn btn-primary">Add Category</button>
             </div>
           </form>
-
-          <div id="response-message" class="mt-3 text-center fw-semibold"></div>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Message if not logged in -->
+<!-- 🔒 If not logged in -->
 <div class="container mt-5" id="unauthorized-message" style="display: none;">
   <div class="alert alert-danger text-center">
     You are not logged in. Please <a href="{% url 'inventory_project:login' %}">login</a> to add a category.
   </div>
 </div>
 
-<!-- jQuery -->
+<!-- ✅ jQuery -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
+<!-- ✅ Bootstrap Toast + Logic -->
 <script>
   $(document).ready(function () {
     const token = localStorage.getItem('access');
 
     if (!token) {
-      alert('You must be logged in to add a category.');
-      window.location.href = "/login/";
-      
+      $('#unauthorized-message').show();
     } else {
-      // Token found, show form
       $('#category-container').show();
     }
 
     $('#add-category-form').on('submit', function (e) {
       e.preventDefault();
+
+      // Reset errors
+      $('#form-error').addClass('d-none').html('');
+      $('#categoryName, #description').removeClass('is-invalid');
+      $('#categoryName-error, #description-error').text('');
 
       const name = $('#categoryName').val();
       const description = $('#description').val();
@@ -70,27 +82,60 @@
           'Authorization': 'Bearer ' + token,
           'Content-Type': 'application/json',
         },
-        data: JSON.stringify({
-          name: name,
-          description: description
-        }),
+        data: JSON.stringify({ name, description }),
         success: function (res) {
-          $('#response-message').text(res.message).removeClass('text-danger').addClass('text-success');
+          showToast(res.message || 'Category added successfully!', 'success');
           $('#add-category-form')[0].reset();
+
+          setTimeout(function () {
+            window.location.href = "{% url 'inventory_project:dashboard' %}";
+          }, 1500);
         },
         error: function (xhr) {
-          let msg = "";
+          const errors = xhr.responseJSON || {};
+          let generalError = '';
+
+
           if (xhr.status === 401) {
-            msg = "Invalid token. Please login again.";
-          } else if (xhr.responseJSON) {
-            for (let key in xhr.responseJSON) {
-              msg += `${key}: ${xhr.responseJSON[key]} `;
+            generalError = "Invalid token. Please login again.";
+          } else {
+            for (let key in errors) {
+              if (key === 'name') {
+                $('#categoryName').addClass('is-invalid');
+                $('#categoryName-error').text(errors[key]);
+              } else if (key === 'description') {
+                $('#description').addClass('is-invalid');
+                $('#description-error').text(errors[key]);
+              } else {
+                generalError += `<div>${errors[key]}</div>`;
+              }
             }
           }
-          $('#response-message').text(msg).removeClass('text-success').addClass('text-danger');
+
+          if (generalError) {
+            $('#form-error').removeClass('d-none').html(generalError);
+          }
         }
       });
     });
+
+    // ✅ Toast utility function
+    function showToast(message, type) {
+      const toastHTML = `
+        <div class="toast align-items-center text-bg-${type} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+        </div>
+      `;
+      const $container = $('.toast-container');
+      $container.html(toastHTML);
+      const toastEl = $container.find('.toast')[0];
+      const toast = new bootstrap.Toast(toastEl);
+      toast.show();
+    }
   });
 </script>
+
 {% endblock %}
