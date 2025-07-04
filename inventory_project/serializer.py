@@ -16,10 +16,6 @@ class CategoryAddSerializer(serializers.ModelSerializer):
         return value.strip()
 
 
-class CategoryAddSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Category
-        fields = ['name', 'description']
 
 class CategoryListSerializer(serializers.ModelSerializer):
     class Meta:
@@ -32,9 +28,11 @@ class ItemListSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class AddItemSerializer(serializers.ModelSerializer):
+    category_id = serializers.IntegerField(write_only=True)
+
     class Meta:
         model = Item
-        fields = ['name', 'unit', 'description', 'current_stock']
+        fields = ['name', 'category_id', 'unit', 'description', 'current_stock']
 
 class StockTransactionSerializer(serializers.ModelSerializer):
     class Meta:

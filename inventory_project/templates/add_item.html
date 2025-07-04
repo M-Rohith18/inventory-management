@@ -2,6 +2,11 @@
 {% block content %}
 {% include "includes/header.html" %}
 
+<!-- ✅ Toast Container -->
+<div aria-live="polite" aria-atomic="true" class="position-relative">
+  <div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+</div>
+
 <section class="container py-5">
   <div class="row justify-content-center">
     <div class="col-md-7 col-lg-6">
@@ -11,37 +16,45 @@
         </div>
         <div class="card-body p-4">
 
+          <!-- 🔴 General non-field error -->
+          <div id="form-error" class="alert alert-danger d-none"></div>
+
           <form id="addItemForm" novalidate>
             <!-- Item Name -->
             <div class="mb-3">
               <label for="itemName" class="form-label">Item Name</label>
               <input type="text" class="form-control" id="itemName" name="name" placeholder="Enter Item Name">
+              <small class="text-danger d-block mt-1" id="name-error"></small>
             </div>
 
             <!-- Category -->
             <div class="mb-3">
               <label for="itemCategory" class="form-label">Category</label>
-              <select id="itemCategory" class="form-control" name="category_id">
+              <select id="itemCategory" class="form-control" name="category">
                 <option value="">Select a category</option>
               </select>
+              <small class="text-danger d-block mt-1" id="category-error"></small>
             </div>
 
             <!-- Unit -->
             <div class="mb-3">
               <label for="itemUnit" class="form-label">Unit</label>
               <input type="text" class="form-control" id="itemUnit" name="unit" placeholder="e.g., pcs">
+              <small class="text-danger d-block mt-1" id="unit-error"></small>
             </div>
 
             <!-- Description -->
             <div class="mb-3">
               <label for="itemDescription" class="form-label">Description (Optional)</label>
               <textarea class="form-control" id="itemDescription" name="description" rows="3"></textarea>
+              <small class="text-danger d-block mt-1" id="description-error"></small>
             </div>
 
             <!-- Current Stock -->
             <div class="mb-4">
               <label for="current_stock" class="form-label">Current Stock</label>
-              <input type="number" class="form-control" id="current_stock" name="current_stock">
+              <input type="number" class="form-control" id="current_stock" name="current_stock" min="1">
+              <small class="text-danger d-block mt-1" id="current_stock-error"></small>
             </div>
 
             <!-- Submit -->
@@ -49,21 +62,19 @@
               <i class="bi bi-plus-circle me-1"></i> Add Item
             </button>
           </form>
-
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- jQuery and Script -->
+<!-- jQuery + Toast Script -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
   const token = localStorage.getItem("access");
-
   if (!token) {
     alert("You must be logged in.");
-    window.location.href = "/login";
+    window.location.href = "/login/";
   }
 
   $(document).ready(function () {
@@ -86,15 +97,20 @@
       },
     });
 
-    // Submit form
+    // Form submission
     $("#addItemForm").on("submit", function (e) {
       e.preventDefault();
 
+      // Reset errors
+      $(".form-control").removeClass("is-invalid");
+      $("small.text-danger").text("");
+      $("#form-error").addClass("d-none").text("");
+
       const payload = {
-        name: $("#itemName").val(),
-        category_id: $("#itemCategory").val(),
-        unit: $("#itemUnit").val(),
-        description: $("#itemDescription").val(),
+        name: $("#itemName").val().trim(),
+        category: $("#itemCategory").val(),
+        unit: $("#itemUnit").val().trim(),
+        description: $("#itemDescription").val().trim(),
         current_stock: $("#current_stock").val()
       };
 
@@ -107,14 +123,42 @@
         },
         data: JSON.stringify(payload),
         success: function () {
-          alert("Item added successfully!");
+          showToast("Item added successfully!", "success");
           $("#addItemForm")[0].reset();
+
+          setTimeout(function () {
+            window.location.href = "{% url 'inventory_project:dashboard' %}";
+          }, 1500);
         },
         error: function (xhr) {
-          alert("Failed to add item: " + (xhr.responseJSON.detail || "Unknown error"));
+          const errors = xhr.responseJSON || {};
+          for (let key in errors) {
+            if (key === 'non_field_errors') {
+              $('#form-error').removeClass('d-none').text(errors[key][0]);
+            } else {
+              $(`[name="${key}"]`).addClass("is-invalid");
+              $(`#${key}-error`).text(errors[key][0]);
+            }
+          }
         },
       });
     });
+
+    // ✅ Toast function
+    function showToast(message, type) {
+      const toastHTML = `
+        <div class="toast align-items-center text-bg-${type} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+        </div>`;
+      const $container = $(".toast-container");
+      $container.html(toastHTML);
+      const toastEl = $container.find(".toast")[0];
+      const toast = new bootstrap.Toast(toastEl);
+      toast.show();
+    }
   });
 </script>
 {% endblock %}

@@ -163,6 +163,7 @@ class AddItemAPIView(APIView):
         auth_header = request.headers.get('Authorization')
         if not auth_header or not auth_header.startswith('Bearer '):
             return Response({'detail': 'Missing or invalid token'}, status=401)
+
         token = auth_header.split(' ')[1]
         try:
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
@@ -173,25 +174,30 @@ class AddItemAPIView(APIView):
             return Response({'detail': 'Token invalid'}, status=401)
         except User.DoesNotExist:
             return Response({'detail': 'User not found'}, status=404)
-        category_id = request.data.get('category_id')
-        if not category_id:
-            return Response({'detail': 'Category is required'}, status=400)
-        try:
-            category = Category.objects.get(id=category_id, user=user)
-        except Category.DoesNotExist:
-            return Response({'detail': 'Invalid category'}, status=400)
-        item_count = Item.objects.filter(user=user).count() + 1
-        sku = f"ITEM-{item_count:03d}"
+
         serializer = AddItemSerializer(data=request.data)
         if serializer.is_valid():
+            category_id = serializer.validated_data.get('category_id')
+            try:
+                category = Category.objects.get(id=category_id, user=user)
+            except Category.DoesNotExist:
+                return Response({'category_id': ['Invalid category']}, status=400)
+
+            item_count = Item.objects.filter(user=user).count() + 1
+            sku = f"ITEM-{item_count:03d}"
+
             Item.objects.create(
                 user=user,
                 category=category,
                 sku=sku,
-                **serializer.validated_data
+                name=serializer.validated_data['name'],
+                unit=serializer.validated_data['unit'],
+                description=serializer.validated_data.get('description', ''),
+                current_stock=serializer.validated_data['current_stock']
             )
             return Response({'message': 'Item added successfully'}, status=201)
         return Response(serializer.errors, status=400)
+
 
 def add_reduce_item(request): 
     return render(request,"add_reduce.html")
