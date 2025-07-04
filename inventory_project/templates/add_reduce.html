@@ -2,6 +2,11 @@
 {% block content %}
 {% include "includes/header.html" %}
 
+<!-- ✅ Toast Container -->
+<div aria-live="polite" aria-atomic="true" class="position-relative">
+  <div class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+</div>
+
 <section class="container py-5">
   <div class="row justify-content-center">
     <div class="col-md-7 col-lg-6">
@@ -10,31 +15,43 @@
           <h4 class="mb-0 text-center py-2">Add / Reduce Stock</h4>
         </div>
         <div class="card-body p-4">
-          <form id="stockForm">
+
+          <!-- 🔴 Non-field Error -->
+          <div id="form-error" class="alert alert-danger d-none"></div>
+
+          <form id="stockForm" novalidate>
+            <!-- Item -->
             <div class="mb-3">
               <label for="item" class="form-label">Select Item</label>
               <select id="item" class="form-control" name="item">
-                <option value="">-- Choose Item --</option>
+                <option value="" disabled selected>-- Choose Item --</option>
               </select>
+              <small class="text-danger d-block mt-1" id="item-error"></small>
             </div>
 
+            <!-- Type -->
             <div class="mb-3">
               <label for="type" class="form-label">Transaction Type</label>
               <select id="type" class="form-control" name="type">
-                <option value="">-- Choose Type --</option>
+                <option value="" disabled selected>-- Choose Type --</option>
                 <option value="IN">Add</option>
                 <option value="OUT">Reduce</option>
               </select>
+              <small class="text-danger d-block mt-1" id="type-error"></small>
             </div>
 
+            <!-- Quantity -->
             <div class="mb-3">
               <label for="quantity" class="form-label">Quantity</label>
-              <input type="number" id="quantity" name="quantity" class="form-control" placeholder="Enter quantity">
+              <input type="number" id="quantity" name="quantity" class="form-control" min="1" placeholder="Enter quantity">
+              <small class="text-danger d-block mt-1" id="quantity-error"></small>
             </div>
 
+            <!-- Notes -->
             <div class="mb-3">
               <label for="notes" class="form-label">Notes (Optional)</label>
               <textarea id="notes" name="notes" class="form-control" rows="3"></textarea>
+              <small class="text-danger d-block mt-1" id="notes-error"></small>
             </div>
 
             <button type="submit" class="btn btn-primary w-100">Submit</button>
@@ -45,18 +62,17 @@
   </div>
 </section>
 
-<!-- jQuery CDN -->
+<!-- ✅ jQuery and Toast -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
   const token = localStorage.getItem("access");
-
   if (!token) {
     alert("You must be logged in.");
-    window.location.href = "login";
+    window.location.href = "/login/";
   }
 
   $(document).ready(function () {
-    // Load items
+    // ✅ Load items
     $.ajax({
       url: '/api/item/',
       method: 'GET',
@@ -68,20 +84,25 @@
           $('#item').append(
             $('<option>', {
               value: item.id,
-              text: item.name + ' (Stock: ' + item.current_stock + ')'
+              text: `${item.name} (Stock: ${item.current_stock})`
             })
           );
         });
       },
       error: function () {
         alert('Error loading items.');
-        window.location.href = "/login";
+        window.location.href = "/login/";
       }
     });
 
-    // Submit form
+    // ✅ Form submission
     $('#stockForm').submit(function (e) {
       e.preventDefault();
+
+      // Clear errors
+      $('.form-control').removeClass('is-invalid');
+      $('small.text-danger').text('');
+      $('#form-error').addClass('d-none').text('');
 
       const payload = {
         item: $('#item').val(),
@@ -89,6 +110,25 @@
         quantity: $('#quantity').val(),
         notes: $('#notes').val()
       };
+
+      // Manual frontend validation
+      let hasError = false;
+      if (!payload.item) {
+        $('#item-error').text('Please select an item.');
+        $('#item').addClass('is-invalid');
+        hasError = true;
+      }
+      if (!payload.type) {
+        $('#type-error').text('Please choose a transaction type.');
+        $('#type').addClass('is-invalid');
+        hasError = true;
+      }
+      if (!payload.quantity || parseInt(payload.quantity) < 1) {
+        $('#quantity-error').text('Please enter a valid quantity.');
+        $('#quantity').addClass('is-invalid');
+        hasError = true;
+      }
+      if (hasError) return;
 
       $.ajax({
         url: '/api/stock-add-reduce/',
@@ -99,14 +139,46 @@
         },
         data: JSON.stringify(payload),
         success: function () {
-          alert('Stock updated successfully!');
+          showToast("Stock updated successfully!", "success");
           $('#stockForm')[0].reset();
+
+          setTimeout(function () {
+            window.location.href = "{% url 'inventory_project:transaction' %}";
+          }, 1500);
         },
         error: function (xhr) {
-          alert(xhr.responseJSON.detail || 'Something went wrong');
+          const errors = xhr.responseJSON || {};
+          if (xhr.status === 400 && typeof errors === 'object') {
+            for (let key in errors) {
+              if (key === 'non_field_errors') {
+                $('#form-error').removeClass('d-none').text(errors[key][0]);
+              } else {
+                $(`#${key}`).addClass('is-invalid');
+                $(`#${key}-error`).text(errors[key][0]);
+              }
+            }
+          } else {
+            $('#form-error').removeClass('d-none').text("Something went wrong. Please try again.");
+          }
         }
       });
     });
+
+    // ✅ Toast function
+    function showToast(message, type) {
+      const toastHTML = `
+        <div class="toast align-items-center text-bg-${type} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="d-flex">
+            <div class="toast-body">${message}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+        </div>`;
+      const $container = $(".toast-container");
+      $container.html(toastHTML);
+      const toastEl = $container.find(".toast")[0];
+      const toast = new bootstrap.Toast(toastEl);
+      toast.show();
+    }
   });
 </script>
 {% endblock %}

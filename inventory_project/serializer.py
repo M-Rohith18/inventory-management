@@ -10,7 +10,7 @@ class CategoryAddSerializer(serializers.ModelSerializer):
         fields = ['name', 'description']
 
     def validate_name(self, value):
-        user = self.context('user')
+        user = self.context['user']
         if Category.objects.filter(name__iexact=value.strip(), user=user).exists():
             raise serializers.ValidationError("Category with this name already exists.")
         return value.strip()
@@ -29,10 +29,24 @@ class ItemListSerializer(serializers.ModelSerializer):
 
 class AddItemSerializer(serializers.ModelSerializer):
     category_id = serializers.IntegerField(write_only=True)
-
     class Meta:
         model = Item
         fields = ['name', 'category_id', 'unit', 'description', 'current_stock']
+    def validate(self, data):
+        name = data.get("name")
+        category_id = data.get("category_id")
+        user = self.context['user']
+
+        if name and category_id:
+            if Item.objects.filter(
+                name__iexact=name.strip(),
+                category_id=category_id,
+                user=user
+            ).exists():
+                raise serializers.ValidationError({
+                    "name": "An item with this name already exists in the selected category."
+                })
+        return data
 
 class StockTransactionSerializer(serializers.ModelSerializer):
     class Meta:
@@ -47,6 +61,9 @@ class ItemSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'category_name', 'current_stock']
 
 class StockTransactionListSerializer(serializers.ModelSerializer):
+    item_name = serializers.CharField(source='name.name', read_only=True)
+    created_at = serializers.DateTimeField(format="%Y-%m-%d", read_only=True)
+
     class Meta:
         model = Stock_Transactions
-        fields = '__all__'
+        fields = ['item_name', 'type', 'quantity', 'created_at']

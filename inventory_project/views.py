@@ -20,6 +20,7 @@ from rest_framework import status
 from .serializer import AddItemSerializer, CategoryAddSerializer, CategoryListSerializer, ItemListSerializer, ItemSerializer, StockTransactionListSerializer
 import jwt
 from django.conf import settings
+from .authentication import JWTAuthenticationMixin
 
 # Create your views here.
 
@@ -80,44 +81,21 @@ def login(request):
 def dashboard(request):
     return render(request,"dashboard.html")
 
-class CategoryListAPIView(APIView):
+class CategoryListAPIView(JWTAuthenticationMixin, APIView):
     def get(self, request):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
-        token = auth_header.split(' ')[1]
-        try:
-            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            user_id = decoded_token.get('user_id')
-            user = User.objects.get(id=user_id)
-        except jwt.ExpiredSignatureError:
-            return Response({'detail': 'Token has expired'}, status=status.HTTP_401_UNAUTHORIZED)
-        except jwt.DecodeError:
-            return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
-        except User.DoesNotExist:
-            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        user, error = self.authenticate(request)
+        if error:
+            return error
+
         categories = Category.objects.filter(user=user).all()
         serializer = CategoryListSerializer(categories, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-class ItemListAPIView(APIView):
+class ItemListAPIView(JWTAuthenticationMixin,APIView):
     def get(self, request):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
-        token = auth_header.split(' ')[1]
-        try:
-            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            user_id = decoded_token.get('user_id')
-            user = User.objects.get(id=user_id)
-        except jwt.ExpiredSignatureError:
-            return Response({'detail': 'Token has expired'}, status=status.HTTP_401_UNAUTHORIZED)
-        except jwt.DecodeError:
-            return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
-        except User.DoesNotExist:
-            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        user, error = self.authenticate(request)
+        if error:
+            return error
         category_id = request.GET.get('category_id')
         if not category_id:
             return Response({'detail': 'Category ID is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -128,23 +106,11 @@ class ItemListAPIView(APIView):
 def add_category(request):
     return render(request,"category.html")
 
-class AddCategoryAPIView(APIView):
+class AddCategoryAPIView(JWTAuthenticationMixin,APIView):
     def post(self, request):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        token = auth_header.split(' ')[1]
-        try:
-            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            user_id = decoded_token.get('user_id')
-            user = User.objects.get(id=user_id)
-        except jwt.ExpiredSignatureError:
-            return Response({'detail': 'Token has expired'}, status=status.HTTP_401_UNAUTHORIZED)
-        except jwt.DecodeError:
-            return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
-        except User.DoesNotExist:
-            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        user, error = self.authenticate(request)
+        if error:
+            return error
 
         serializer = CategoryAddSerializer(data=request.data, context={'user': user})
         if serializer.is_valid():
@@ -158,66 +124,43 @@ class AddCategoryAPIView(APIView):
 def add_item(request):
     return render(request,"add_item.html")
 
-class AddItemAPIView(APIView):
+
+class AddItemAPIView(JWTAuthenticationMixin, APIView):
     def post(self, request):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return Response({'detail': 'Missing or invalid token'}, status=401)
+        user, error = self.authenticate(request)
+        if error:
+            return error
 
-        token = auth_header.split(' ')[1]
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            user = User.objects.get(id=payload.get('user_id'))
-        except jwt.ExpiredSignatureError:
-            return Response({'detail': 'Token expired'}, status=401)
-        except jwt.DecodeError:
-            return Response({'detail': 'Token invalid'}, status=401)
-        except User.DoesNotExist:
-            return Response({'detail': 'User not found'}, status=404)
-
-        serializer = AddItemSerializer(data=request.data)
+        serializer = AddItemSerializer(data=request.data, context={'user': user})
         if serializer.is_valid():
-            category_id = serializer.validated_data.get('category_id')
-            try:
-                category = Category.objects.get(id=category_id, user=user)
-            except Category.DoesNotExist:
-                return Response({'category_id': ['Invalid category']}, status=400)
-
             item_count = Item.objects.filter(user=user).count() + 1
             sku = f"ITEM-{item_count:03d}"
 
+            try:
+                category = Category.objects.get(id=request.data['category_id'], user=user)
+            except Category.DoesNotExist:
+                return Response({'category_id': ['Invalid or unauthorized category ID.']}, status=400)
+
             Item.objects.create(
                 user=user,
-                category=category,
                 sku=sku,
-                name=serializer.validated_data['name'],
-                unit=serializer.validated_data['unit'],
-                description=serializer.validated_data.get('description', ''),
-                current_stock=serializer.validated_data['current_stock']
+                category=category,
+                **serializer.validated_data
             )
             return Response({'message': 'Item added successfully'}, status=201)
+
         return Response(serializer.errors, status=400)
 
 
 def add_reduce_item(request): 
     return render(request,"add_reduce.html")
 
-class StockTransactionAPIView(APIView):
+class StockTransactionAPIView(JWTAuthenticationMixin,APIView):
     def post(self, request):
         auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return Response({'detail': 'Missing or invalid token'}, status=401)
-        token = auth_header.split(' ')[1]
-
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            user = User.objects.get(id=payload.get('user_id'))
-        except jwt.ExpiredSignatureError:
-            return Response({'detail': 'Token expired'}, status=401)
-        except jwt.DecodeError:
-            return Response({'detail': 'Token invalid'}, status=401)
-        except User.DoesNotExist:
-            return Response({'detail': 'User not found'}, status=404)
+        user, error = self.authenticate(request)
+        if error:
+            return error
         item_id = request.data.get('item')
 
         try:
@@ -257,22 +200,11 @@ class StockTransactionAPIView(APIView):
             'reference_note': txn.reference_note
         }, status=201)
     
-class ItemListAPIView(APIView):
+class ItemListAPIView(JWTAuthenticationMixin,APIView):
     def get(self, request):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
-        token = auth_header.split(' ')[1]
-        try:
-            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            user_id = decoded_token.get('user_id')
-            user = User.objects.get(id=user_id)
-        except jwt.ExpiredSignatureError:
-            return Response({'detail': 'Token has expired'}, status=status.HTTP_401_UNAUTHORIZED)
-        except jwt.DecodeError:
-            return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
-        except User.DoesNotExist:
-            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        user, error = self.authenticate(request)
+        if error:
+            return error
         category_id = request.GET.get('category_id')
         if category_id:
             items = Item.objects.filter(user=user, category_id=category_id)
@@ -284,25 +216,16 @@ class ItemListAPIView(APIView):
 def transaction(request):   
     return render(request, "transaction.html")
 
-class StockTransactionListAPIView(APIView):
+class StockTransactionListAPIView(JWTAuthenticationMixin,APIView):
     def get(self, request):
-        auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return Response({'detail': 'Authorization header missing or invalid'}, status=status.HTTP_401_UNAUTHORIZED)
-        token = auth_header.split(' ')[1]
-        try:
-            decoded_token = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-            user_id = decoded_token.get('user_id')
-            user = User.objects.get(id=user_id)
-        except jwt.ExpiredSignatureError:
-            return Response({'detail': 'Token has expired'}, status=status.HTTP_401_UNAUTHORIZED)
-        except jwt.DecodeError:
-            return Response({'detail': 'Token is invalid'}, status=status.HTTP_401_UNAUTHORIZED)
-        except User.DoesNotExist:
-            return Response({'detail': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        user, error = self.authenticate(request)
+        if error:
+            return error
+
         transactions = Stock_Transactions.objects.filter(user=user).order_by('-created_at')
         serializer = StockTransactionListSerializer(transactions, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 def download_reports(request):
     response = HttpResponse(content_type='text/csv')
