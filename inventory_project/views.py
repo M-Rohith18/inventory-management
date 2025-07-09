@@ -36,6 +36,7 @@ def register(request):
             return render(request,"register.html",{"form":form,"redirect_to_login":True})
     return render(request, "register.html",{"form":form})
 
+
 def forget_password(request):
     form = Forget_Password_Form()
     if request.method == "POST":
@@ -52,6 +53,7 @@ def forget_password(request):
             send_mail(subject,message,"mrohith481@gmail.com",[email])
             messages.success(request,"email sent successfully")
     return render(request,"forget_password.html",{"form":form,"redirect":True})
+
 
 def reset_password(request,uidb64,token):
     form = Reset_Password_Form()
@@ -71,52 +73,61 @@ def reset_password(request,uidb64,token):
                 return render(request,"reset_password.html",{'redirect_to_login':True})
     return render(request,"reset_password.html")
 
+
 def logout(request):
     auth_logout(request)
     return redirect("inventory_project:login")
 
+
 def login(request):
     return render(request,"login.html")
+
 
 def dashboard(request):
     return render(request,"dashboard.html")
 
-class CategoryListAPIView(JWTAuthenticationMixin, APIView):
-    def get(self, request):
-        user, error = self.authenticate(request)
-        if error:
-            return error
 
-        categories = Category.objects.filter(user=user).all()
+class CategoryListAPIView(JWTAuthenticationMixin,APIView):
+    def get(self, request):
+        user, error_response = self.authenticate(request)
+        if error_response:
+            return error_response
+
+        categories = Category.objects.filter(user=user)
         serializer = CategoryListSerializer(categories, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
+    
 class ItemListAPIView(JWTAuthenticationMixin,APIView):
     def get(self, request):
-        user, error = self.authenticate(request)
-        if error:
-            return error
+        user, error_response = self.authenticate(request)
+        if error_response:
+            return error_response
+      
         category_id = request.GET.get('category_id')
-        if not category_id:
-            return Response({'detail': 'Category ID is required'}, status=status.HTTP_400_BAD_REQUEST)
-        items = Item.objects.filter(user=user, category_id=category_id)
+        if category_id:
+            items = Item.objects.filter(user=request.user, category_id=category_id)
+        else:
+            items = Item.objects.filter(user=request.user)
+
         serializer = ItemListSerializer(items, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 
 def add_category(request):
     return render(request,"category.html")
 
 class AddCategoryAPIView(JWTAuthenticationMixin,APIView):
     def post(self, request):
-        user, error = self.authenticate(request)
-        if error:
-            return error
-
-        serializer = CategoryAddSerializer(data=request.data, context={'user': user})
+        user, error_response = self.authenticate(request)
+        if error_response:
+            return error_response
+        
+        serializer = CategoryAddSerializer(data=request.data, context={'user': request.user})
         if serializer.is_valid():
-            serializer.save(user=user)
+            serializer.save(user=request.user)
             return Response({'message': 'Category added successfully'}, status=status.HTTP_201_CREATED)
-
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -125,24 +136,24 @@ def add_item(request):
     return render(request,"add_item.html")
 
 
-class AddItemAPIView(JWTAuthenticationMixin, APIView):
+class AddItemAPIView(JWTAuthenticationMixin,APIView):
     def post(self, request):
-        user, error = self.authenticate(request)
-        if error:
-            return error
-
-        serializer = AddItemSerializer(data=request.data, context={'user': user})
+        user, error_response = self.authenticate(request)
+        if error_response:
+            return error_response
+        
+        serializer = AddItemSerializer(data=request.data, context={'user': request.user})
         if serializer.is_valid():
-            item_count = Item.objects.filter(user=user).count() + 1
+            item_count = Item.objects.filter(user=request.user).count() + 1
             sku = f"ITEM-{item_count:03d}"
 
             try:
-                category = Category.objects.get(id=request.data['category_id'], user=user)
+                category = Category.objects.get(id=request.data['category_id'], user=request.user)
             except Category.DoesNotExist:
                 return Response({'category_id': ['Invalid or unauthorized category ID.']}, status=400)
 
             Item.objects.create(
-                user=user,
+                user=request.user,
                 sku=sku,
                 category=category,
                 **serializer.validated_data
@@ -157,72 +168,86 @@ def add_reduce_item(request):
 
 class StockTransactionAPIView(JWTAuthenticationMixin,APIView):
     def post(self, request):
-        auth_header = request.headers.get('Authorization')
-        user, error = self.authenticate(request)
-        if error:
-            return error
+        user, error_response = self.authenticate(request)
+        if error_response:
+            return error_response
+
         item_id = request.data.get('item')
+        if not item_id:
+            return Response({'detail': 'Item ID is required'}, status=400)
 
         try:
-            item = Item.objects.get(id=item_id, user=user)
+            item = Item.objects.get(id=item_id, user=request.user)
         except Item.DoesNotExist:
             return Response({'detail': 'Item not found or not yours'}, status=400)
+
         trans_type = request.data.get('type')
         quantity = int(request.data.get('quantity', 0))
         notes = request.data.get('notes', '')
 
         if trans_type == 'OUT' and quantity > item.current_stock:
             return Response({'detail': 'Not enough stock to reduce'}, status=400)
+
         if trans_type == 'IN':
             item.current_stock += quantity
-        elif trans_type == 'OUT':   
+        elif trans_type == 'OUT':
             item.current_stock -= quantity
         item.save()
 
         if item.current_stock < 20:
             user_email = "mrohith481@gmail.com"
             subject = "Low Stock Alert Mail"
-            message = render_to_string('stock_alert_mail.html', {'item_name': item.name, 'item_Quantity': item.current_stock, 'item_minimum_stock': 20, 'user': request.user})
-            send_mail(subject, message, user_email, [user.email])
+            message = render_to_string('stock_alert_mail.html', {
+                'item_name': item.name,
+                'item_Quantity': item.current_stock,
+                'item_minimum_stock': 20,
+                'user': request.user
+            })
+            send_mail(subject, message, user_email, [request.user.email])
 
         txn = Stock_Transactions.objects.create(
             name=item,
-            user=user,
+            user=request.user,
             type=trans_type,
             quantity=quantity,
-            reference_note=0, 
+            reference_note=0,
             notes=notes
         )
         txn.reference_note = txn.id
         txn.save()
+
         return Response({
             'message': 'Stock updated successfully',
             'reference_note': txn.reference_note
         }, status=201)
-    
+
+
 class ItemListAPIView(JWTAuthenticationMixin,APIView):
     def get(self, request):
-        user, error = self.authenticate(request)
-        if error:
-            return error
+        user, error_response = self.authenticate(request)
+        if error_response:
+            return error_response
+
         category_id = request.GET.get('category_id')
         if category_id:
-            items = Item.objects.filter(user=user, category_id=category_id)
+            items = Item.objects.filter(user=request.user, category_id=category_id)
         else:
-            items = Item.objects.filter(user=user)
-        serializer = ItemSerializer(items, many=True)
+            items = Item.objects.filter(user=request.user)
+
+        serializer = ItemListSerializer(items, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
     
 def transaction(request):   
     return render(request, "transaction.html")
 
 class StockTransactionListAPIView(JWTAuthenticationMixin,APIView):
     def get(self, request):
-        user, error = self.authenticate(request)
-        if error:
-            return error
+        user, error_response = self.authenticate(request)
+        if error_response:
+            return error_response
 
-        transactions = Stock_Transactions.objects.filter(user=user).order_by('-created_at')
+        transactions = Stock_Transactions.objects.filter(user=request.user).order_by('-created_at')
         serializer = StockTransactionListSerializer(transactions, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
