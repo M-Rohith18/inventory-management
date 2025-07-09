@@ -131,16 +131,16 @@
           }, 1500);
         },
         error: function (xhr) {
-        const errors = xhr.responseJSON || {};
-        for (let key in errors) {
-          if (key === 'non_field_errors') {
-            $('#form-error').removeClass('d-none').text(errors[key][0]);
-          } else {
-            $(`[name="${key}"]`).addClass("is-invalid");
-            $(`#${key}-error`).text(errors[key][0]); // Make sure id matches the field
+          const errors = xhr.responseJSON || {};
+          for (let key in errors) {
+            if (key === "non_field_errors" || key === "detail") {
+              $('#form-error').removeClass('d-none').text(errors[key][0] || errors[key]);
+            } else {
+              $(`[name="${key}"]`).addClass("is-invalid");
+              $(`#${key}-error`).text(errors[key][0]);
+            }
           }
-        }
-      }
+        },
       });
     });
 

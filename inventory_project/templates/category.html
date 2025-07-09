@@ -17,7 +17,7 @@
         </div>
         <div class="card-body p-4">
 
-          <!-- 🔴 General form-level error -->
+          <!-- 🔴 General error -->
           <div id="form-error" class="alert alert-danger d-none"></div>
 
           <form id="add-category-form" novalidate>
@@ -37,43 +37,46 @@
               <button type="submit" class="btn btn-primary">Add Category</button>
             </div>
           </form>
+
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- 🔒 If not logged in -->
+<!-- 🔒 Not Logged In Message -->
 <div class="container mt-5" id="unauthorized-message" style="display: none;">
   <div class="alert alert-danger text-center">
     You are not logged in. Please <a href="{% url 'inventory_project:login' %}">login</a> to add a category.
   </div>
 </div>
 
-<!-- ✅ jQuery -->
+<!-- ✅ jQuery + Toast Script -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
-<!-- ✅ Bootstrap Toast + Logic -->
 <script>
   $(document).ready(function () {
     const token = localStorage.getItem('access');
 
     if (!token) {
-      $('#unauthorized-message').show();
-    } else {
-      $('#category-container').show();
+    $('#unauthorized-message').show();
+      return;
     }
+
+    $('#category-container').show();
 
     $('#add-category-form').on('submit', function (e) {
       e.preventDefault();
 
-      // Reset errors
+      // Reset previous errors
       $('#form-error').addClass('d-none').html('');
       $('#categoryName, #description').removeClass('is-invalid');
       $('#categoryName-error, #description-error').text('');
 
-      const name = $('#categoryName').val();
-      const description = $('#description').val();
+      // Optional: Normalize input (Title Case)
+      const name = $('#categoryName').val().trim();
+      const description = $('#description').val().trim();
+
 
       $.ajax({
         url: '/api/add-category/',
@@ -95,19 +98,19 @@
           const errors = xhr.responseJSON || {};
           let generalError = '';
 
-
           if (xhr.status === 401) {
             generalError = "Invalid token. Please login again.";
           } else {
             for (let key in errors) {
+              const errorText = Array.isArray(errors[key]) ? errors[key][0] : errors[key];
               if (key === 'name') {
                 $('#categoryName').addClass('is-invalid');
-                $('#categoryName-error').text(errors[key]);
+                $('#categoryName-error').text(errorText);
               } else if (key === 'description') {
                 $('#description').addClass('is-invalid');
-                $('#description-error').text(errors[key]);
+                $('#description-error').text(errorText);
               } else {
-                generalError += `<div>${errors[key]}</div>`;
+                generalError += `<div>${errorText}</div>`;
               }
             }
           }
@@ -119,7 +122,6 @@
       });
     });
 
-    // ✅ Toast utility function
     function showToast(message, type) {
       const toastHTML = `
         <div class="toast align-items-center text-bg-${type} border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
@@ -127,8 +129,7 @@
             <div class="toast-body">${message}</div>
             <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
           </div>
-        </div>
-      `;
+        </div>`;
       const $container = $('.toast-container');
       $container.html(toastHTML);
       const toastEl = $container.find('.toast')[0];
