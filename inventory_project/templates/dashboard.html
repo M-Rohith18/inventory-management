@@ -22,17 +22,7 @@
       <input type="text" id="search-item" class="form-control" placeholder="Enter item name">
     </div>
 
-    <div class="col-md-2">
-      <label for="page-size" class="form-label">Items per page</label>
-      <select id="page-size" class="form-select">
-        <option value="10">10</option>
-        <option value="25" selected>25</option>
-        <option value="50">50</option>
-        <option value="1000">All</option>
-      </select>
-    </div>
-
-    <div class="col-md-2">
+    <div class="col-md-3">
       <label class="form-label">Upload CSV</label>
       <div class="d-flex">
         <input type="file" id="upload-file" accept=".csv" class="form-control me-2">
@@ -40,8 +30,8 @@
       </div>
     </div>
 
-    <div class="col-md-1">
-      <label class="form-label">Sample</label>
+    <div class="col-md-2">
+      <label class="form-label">Sample CSV</label>
       <a href="{% static 'inventory_export.csv' %}" class="btn btn-danger w-100" download>Sample</a>
     </div>
 
@@ -56,9 +46,9 @@
     <table class="table table-bordered table-hover text-center align-middle">
       <thead class="table-light">
         <tr>
-          <th><a href="#" class="sort-link" data-sort="category_name">Category <span class="sort-icon">⇅</span></a></th>
-          <th><a href="#" class="sort-link" data-sort="name">Item Name <span class="sort-icon">⇅</span></a></th>
-          <th><a href="#" class="sort-link" data-sort="current_stock">Current Stock <span class="sort-icon">⇅</span></a></th>
+          <th>Category</th>
+          <th>Item Name</th>
+          <th>Current Stock</th>
         </tr>
       </thead>
       <tbody id="item-table-body">
@@ -73,6 +63,7 @@
 
 <!-- ✅ Scripts -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
 <script>
   const token = localStorage.getItem('access');
   if (!token) {
@@ -82,8 +73,6 @@
 
   let currentPage = 1;
   let totalPages = 1;
-  let sortField = '';
-  let sortOrder = '';
 
   $(document).ready(function () {
     // Load categories
@@ -98,14 +87,13 @@
       }
     });
 
+    // Fetch filtered items
     function fetchItems(page = 1) {
       currentPage = page;
       const filters = {
         category_id: $('#category').val(),
         item_name: $('#search-item').val().trim(),
-        page: currentPage,
-        page_size: $('#page-size').val(),
-        ordering: sortField ? (sortOrder === 'desc' ? '-' + sortField : sortField) : ''
+        page: currentPage
       };
 
       $.ajax({
@@ -115,7 +103,7 @@
         data: filters,
         success: function (res) {
           renderTable(res.results || []);
-          renderPagination(res.count, filters.page_size);
+          renderPagination(res.count);
         },
         error: function () {
           $('#item-table-body').html('<tr><td colspan="3">Error loading items.</td></tr>');
@@ -123,6 +111,7 @@
       });
     }
 
+    // Render table
     function renderTable(items) {
       const tbody = $('#item-table-body');
       tbody.empty();
@@ -142,6 +131,7 @@
       }
     }
 
+    // Render pagination
     function renderPagination(count, pageSize = 25) {
       totalPages = Math.ceil(count / pageSize);
       const container = $('#pagination-container');
@@ -150,27 +140,29 @@
       if (totalPages <= 1) return;
 
       let html = `<nav><ul class="pagination">`;
-      html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a></li>`;
+
+      html += `
+        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+          <a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a>
+        </li>`;
 
       for (let i = 1; i <= totalPages; i++) {
-        html += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+        html += `
+          <li class="page-item ${i === currentPage ? 'active' : ''}">
+            <a class="page-link" href="#" data-page="${i}">${i}</a>
+          </li>`;
       }
 
-      html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${currentPage + 1}">Next</a></li>`;
+      html += `
+        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+          <a class="page-link" href="#" data-page="${currentPage + 1}">Next</a>
+        </li>`;
+
       html += `</ul></nav>`;
       container.html(html);
     }
 
-    // Event bindings
-    $('#category').on('change', () => fetchItems(1));
-    $('#page-size').on('change', () => fetchItems(1));
-
-    $('#search-item').on('input', function () {
-      clearTimeout($.data(this, 'timer'));
-      const wait = setTimeout(() => fetchItems(1), 300);
-      $(this).data('timer', wait);
-    });
-
+    // Pagination click
     $(document).on('click', '.page-link', function (e) {
       e.preventDefault();
       const page = parseInt($(this).data('page'));
@@ -179,24 +171,22 @@
       }
     });
 
-    $('.sort-link').on('click', function (e) {
-      e.preventDefault();
-      const newSortField = $(this).data('sort');
-      if (sortField === newSortField) {
-        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
-      } else {
-        sortField = newSortField;
-        sortOrder = 'asc';
-      }
-      fetchItems(1);
+    // Event bindings
+    $('#category').on('change', () => fetchItems(1));
+    $('#search-item').on('input', function () {
+      clearTimeout($.data(this, 'timer'));
+      const wait = setTimeout(() => fetchItems(1), 300);
+      $(this).data('timer', wait);
     });
 
     $('#download-btn').on('click', function () {
       const categoryId = $('#category').val();
       const itemName = $('#search-item').val().trim();
       let url = `/api/download-all/?token=${token}`;
+
       if (categoryId) url += `&category_id=${categoryId}`;
       if (itemName) url += `&item_name=${encodeURIComponent(itemName)}`;
+
       window.open(url, '_blank');
     });
 
@@ -224,7 +214,9 @@
       });
     });
 
+    // Initial load
     fetchItems();
   });
 </script>
+
 {% endblock %}
