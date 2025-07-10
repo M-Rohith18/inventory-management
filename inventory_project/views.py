@@ -1,7 +1,7 @@
 from django.contrib import messages
 from django.shortcuts import render,redirect
 from django.http import HttpResponse
-import csv
+import csv,io
 from .forms import  Forget_Password_Form,  RegisterForm, Reset_Password_Form
 from django.contrib.auth import authenticate,login as auth_login,logout as auth_logout
 from .models import Category, Item, Stock_Transactions
@@ -21,6 +21,12 @@ from .serializer import AddItemSerializer, CategoryAddSerializer, CategoryListSe
 import jwt
 from django.conf import settings
 from .authentication import JWTAuthenticationMixin
+from rest_framework.pagination import PageNumberPagination
+from rest_framework.generics import ListAPIView
+from django.contrib.auth import get_user_model
+from rest_framework.permissions import AllowAny
+
+
 
 # Create your views here.
 
@@ -97,44 +103,71 @@ class CategoryListAPIView(JWTAuthenticationMixin,APIView):
         serializer = CategoryListSerializer(categories, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
     
-    
-class ItemListAPIView(JWTAuthenticationMixin,APIView):
-    def get(self, request):
+class ItemPagination(PageNumberPagination):
+    page_size = 10
+
+class ItemListViewAPIView(JWTAuthenticationMixin, ListAPIView):
+    serializer_class = ItemListSerializer
+    pagination_class = ItemPagination
+
+    def get_queryset(self):
+        user, error_response = self.authenticate(self.request)
+        if error_response:
+            self._auth_error = error_response
+            return Item.objects.none()
+
+        queryset = Item.objects.filter(user=user)
+
+        category_id = self.request.GET.get('category_id')
+        item_name = self.request.GET.get('item_name')
+
+        if category_id:
+            queryset = queryset.filter(category_id=category_id)
+
+        if item_name:
+            item_name = item_name.strip()
+            if item_name:
+                queryset = queryset.filter(name__icontains=item_name)
+
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        # Handle JWT manually via mixin
         user, error_response = self.authenticate(request)
         if error_response:
             return error_response
-      
-        category_id = request.GET.get('category_id')
-        if category_id:
-            items = Item.objects.filter(user=request.user, category_id=category_id)
-        else:
-            items = Item.objects.filter(user=request.user)
 
-        serializer = ItemListSerializer(items, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        queryset = self.get_queryset()
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 
 def add_category(request):
     return render(request,"category.html")
 
-class AddCategoryAPIView(JWTAuthenticationMixin,APIView):
+class AddCategoryAPIView(JWTAuthenticationMixin, APIView):
     def post(self, request):
         user, error_response = self.authenticate(request)
         if error_response:
             return error_response
-        
-        serializer = CategoryAddSerializer(data=request.data, context={'user': request.user})
+
+        serializer = CategoryAddSerializer(data=request.data, context={'user': user})
         if serializer.is_valid():
-            serializer.save(user=request.user)
+            serializer.save(user=user)
             return Response({'message': 'Category added successfully'}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 
+
 def add_item(request):
     return render(request,"add_item.html")
-
 
 class AddItemAPIView(JWTAuthenticationMixin,APIView):
     def post(self, request):
@@ -320,8 +353,107 @@ def download_reports(request):
     writer.writerow(['Maximum Quantity', get_item(reduce_qs, 'max_qty', reduce_stats, 'max_qty')])
     writer.writerow(['Minimum Quantity', get_item(reduce_qs, 'min_qty', reduce_stats, 'min_qty')])
     writer.writerow([])
-
-
     return response
 
 
+User = get_user_model()
+
+class DownloadAllCSVView(APIView):
+    permission_classes = [AllowAny]  # JWT will be handled manually
+
+    def get(self, request):
+        token = request.GET.get('token')
+        if not token:
+            return HttpResponse("Unauthorized", status=401)
+
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            user = User.objects.get(id=payload['user_id'])
+        except Exception:
+            return HttpResponse("Unauthorized", status=401)
+
+        category_id = request.GET.get('category_id')
+        item_name = request.GET.get('item_name')
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="inventory_export.csv"'
+
+        writer = csv.writer(response)
+
+        # Write categories
+        writer.writerow(['=== Categories ==='])
+        writer.writerow(['ID', 'Name', 'Description'])
+
+        categories = Category.objects.filter(user=user)
+        for category in categories:
+            writer.writerow([category.id, category.name, category.description])
+
+        writer.writerow([])  # Blank line
+        writer.writerow(['=== Items ==='])
+        writer.writerow(['Name', 'Current Stock', 'Category'])
+
+        items = Item.objects.filter(user=user)
+
+        if category_id:
+            items = items.filter(category_id=category_id)
+
+        if item_name:
+            items = items.filter(name__icontains=item_name.strip())
+
+        # ✅ Order items by category name
+        items = items.order_by('category__id', 'id')
+
+        for item in items:
+            writer.writerow([
+                item.name,
+                item.current_stock,
+                item.category.name
+            ])
+
+        return response
+
+
+class UploadInventoryCSV(APIView):
+    def post(self, request):
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            return Response({"detail": "Token missing"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+            user = User.objects.get(id=payload['user_id'])
+        except Exception as e:
+            return Response({"detail": "Invalid token"}, status=status.HTTP_401_UNAUTHORIZED)
+
+        csv_file = request.FILES.get('file')
+        if not csv_file or not csv_file.name.endswith('.csv'):
+            return Response({"detail": "Please upload a valid CSV file"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            decoded_file = csv_file.read().decode('utf-8')
+            io_string = io.StringIO(decoded_file)
+            reader = csv.DictReader(io_string)
+
+            for row in reader:
+                name = row.get('Name', '').strip()
+                category_name = row.get('Category', '').strip()
+
+                if not name or not category_name:
+                    continue
+
+                category, _ = Category.objects.get_or_create(name=category_name, defaults={'user': user})
+                category.user = user
+                category.save()
+
+                item, _ = Item.objects.get_or_create(name=name, user=user, defaults={
+                    'category': category,
+                    'current_stock': int(row.get('Current Stock', 0))
+                })
+                item.category = category
+                item.current_stock = int(row.get('Current Stock', 0))
+                item.save()
+
+            return Response({"detail": "Upload successful"}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"detail": "Error processing file: " + str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

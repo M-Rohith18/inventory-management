@@ -7,11 +7,12 @@ from .models import Category
 class CategoryAddSerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ['id','name', 'description']
+        fields = ['id', 'name', 'description']
 
-    def validate_name(self, value):   
+    def validate_name(self, value):
         value = value.title()
-        if Category.objects.filter(name__iexact=value,).exists():
+        user = self.context['user']
+        if Category.objects.filter(name__iexact=value, user=user).exists():
             raise serializers.ValidationError("You already have a category with this name.")
         return value
 
@@ -23,6 +24,8 @@ class CategoryListSerializer(serializers.ModelSerializer):
         
 
 class ItemListSerializer(serializers.ModelSerializer):
+    category_name = serializers.CharField(source='category.name', read_only=True)
+
     class Meta:
         model = Item
         fields = '__all__'
@@ -36,8 +39,9 @@ class AddItemSerializer(serializers.ModelSerializer):
 
     def validate_name(self, value):
         value = value.title()
+        user = self.context.get('user')
         if Item.objects.filter(name__iexact=value).exists():
-            raise serializers.ValidationError("Category with this name already exists.")
+            raise serializers.ValidationError("Item with this name already exists.")
         return value
     
 

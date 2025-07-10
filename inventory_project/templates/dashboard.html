@@ -1,113 +1,230 @@
 {% extends 'base.html' %}
 {% block content %}
-<!-- Header -->
 {% include "includes/header.html" %}
+{% load static %}
 
-<div class="container col-md-8 mt-5">
+<div class="container col-md-11 mt-4">
   <div class="d-flex justify-content-between align-items-center mb-3">
-    <h1 class="mb-0" style="font-family: Georgia, serif;">Inventory Item List</h1>
+    <h2 class="mb-0" style="font-family: Georgia, serif;">Inventory Item List</h2>
   </div>
 
-  <!-- Category Filter Form -->
-  <div class="row">
-    <div class="col-md-4">
-      <label for="category" class="form-label">Select Category:</label>
+  <!-- Filters Row (1 line) -->
+  <div class="row g-3 align-items-end mb-4">
+    <div class="col-md-2">
+      <label for="category" class="form-label">Category</label>
       <select id="category" class="form-select">
-        <option value="">-- All Categories --</option>
+        <option value="">-- All --</option>
       </select>
-      <br>
-      <button id="search-btn" class="btn btn-primary">Search</button>
+    </div>
+
+    <div class="col-md-3">
+      <label for="search-item" class="form-label">Search Item</label>
+      <input type="text" id="search-item" class="form-control" placeholder="Enter item name">
+    </div>
+
+    <div class="col-md-2">
+      <label for="page-size" class="form-label">Items per page</label>
+      <select id="page-size" class="form-select">
+        <option value="10">10</option>
+        <option value="25" selected>25</option>
+        <option value="50">50</option>
+        <option value="1000">All</option>
+      </select>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label">Upload CSV</label>
+      <div class="d-flex">
+        <input type="file" id="upload-file" accept=".csv" class="form-control me-2">
+        <button id="upload-btn" class="btn btn-warning">Upload</button>
+      </div>
+    </div>
+
+    <div class="col-md-1">
+      <label class="form-label">Sample</label>
+      <a href="{% static 'inventory_export.csv' %}" class="btn btn-danger w-100" download>Sample</a>
+    </div>
+
+    <div class="col-md-2">
+      <label class="form-label">Export</label>
+      <button id="download-btn" class="btn btn-primary w-100">Download</button>
     </div>
   </div>
-</div>
 
   <!-- Items Table -->
-  <div class = "container col-md-7 ">
-  <div class="table-responsive mt-4">
-    <table class="table table-bordered table-hover align-middle text-center">
-      <thead>
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover text-center align-middle">
+      <thead class="table-light">
         <tr>
-          <th>Item Name</th>
-          <th>Current Stock</th>
+          <th><a href="#" class="sort-link" data-sort="category_name">Category <span class="sort-icon">⇅</span></a></th>
+          <th><a href="#" class="sort-link" data-sort="name">Item Name <span class="sort-icon">⇅</span></a></th>
+          <th><a href="#" class="sort-link" data-sort="current_stock">Current Stock <span class="sort-icon">⇅</span></a></th>
         </tr>
       </thead>
       <tbody id="item-table-body">
-        <tr><td colspan="3">No items loaded yet.</td></tr>
+        <tr><td colspan="3">Loading items...</td></tr>
       </tbody>
     </table>
   </div>
+
+  <!-- Pagination -->
+  <div class="d-flex justify-content-center mt-3" id="pagination-container"></div>
 </div>
 
-<!-- jQuery & AJAX logic -->
+<!-- ✅ Scripts -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
   const token = localStorage.getItem('access');
-
   if (!token) {
-    alert('You must be logged in to view this page.');
+    alert('You must be logged in.');
     window.location.href = "/login/";
   }
 
+  let currentPage = 1;
+  let totalPages = 1;
+  let sortField = '';
+  let sortOrder = '';
+
   $(document).ready(function () {
-    // Load categories into dropdown
+    // Load categories
     $.ajax({
       url: '/api/categories/',
       method: 'GET',
-      headers: {
-        'Authorization': 'Bearer ' + token
-      },
+      headers: { 'Authorization': 'Bearer ' + token },
       success: function (data) {
-        data.forEach(function (category) {
-          $('#category').append(
-            $('<option>', {
-              value: category.id,
-              text: category.name
-            })
-          );
+        data.forEach(category => {
+          $('#category').append(`<option value="${category.id}">${category.name}</option>`);
         });
-      },
-      error: function () {
-        alert('Error loading categories. Please re-login.');
-        localStorage.removeItem('access');
-        window.location.href = "/login/";
       }
     });
 
-    // On Search button click
-    $('#search-btn').on('click', function () {
-      const selectedCategoryId = $('#category').val();
+    function fetchItems(page = 1) {
+      currentPage = page;
+      const filters = {
+        category_id: $('#category').val(),
+        item_name: $('#search-item').val().trim(),
+        page: currentPage,
+        page_size: $('#page-size').val(),
+        ordering: sortField ? (sortOrder === 'desc' ? '-' + sortField : sortField) : ''
+      };
 
       $.ajax({
-        url: '/api/items/',  // You'll create this API next
+        url: '/api/items/',
         method: 'GET',
-        headers: {
-          'Authorization': 'Bearer ' + token
-        },
-        data: {
-          category_id: selectedCategoryId
-        },
-        success: function (items) {
-          const tableBody = $('#item-table-body');
-          tableBody.empty();
-
-          if (items.length === 0) {
-            tableBody.append('<tr><td colspan="3">No items found for this category.</td></tr>');
-          } else {
-            items.forEach(function (item) {
-              tableBody.append(`
-                <tr>
-                  <td>${item.name}</td>
-                  <td>${item.current_stock}</td>
-                </tr>
-              `);
-            });
-          }
+        headers: { 'Authorization': 'Bearer ' + token },
+        data: filters,
+        success: function (res) {
+          renderTable(res.results || []);
+          renderPagination(res.count, filters.page_size);
         },
         error: function () {
-          alert('Error fetching items. Please try again.');
+          $('#item-table-body').html('<tr><td colspan="3">Error loading items.</td></tr>');
+        }
+      });
+    }
+
+    function renderTable(items) {
+      const tbody = $('#item-table-body');
+      tbody.empty();
+
+      if (items.length === 0) {
+        tbody.append('<tr><td colspan="3">No items found.</td></tr>');
+      } else {
+        items.forEach(item => {
+          tbody.append(`
+            <tr>
+              <td>${item.category_name}</td>
+              <td>${item.name}</td>
+              <td>${item.current_stock}</td>
+            </tr>
+          `);
+        });
+      }
+    }
+
+    function renderPagination(count, pageSize = 25) {
+      totalPages = Math.ceil(count / pageSize);
+      const container = $('#pagination-container');
+      container.empty();
+
+      if (totalPages <= 1) return;
+
+      let html = `<nav><ul class="pagination">`;
+      html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a></li>`;
+
+      for (let i = 1; i <= totalPages; i++) {
+        html += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+      }
+
+      html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" data-page="${currentPage + 1}">Next</a></li>`;
+      html += `</ul></nav>`;
+      container.html(html);
+    }
+
+    // Event bindings
+    $('#category').on('change', () => fetchItems(1));
+    $('#page-size').on('change', () => fetchItems(1));
+
+    $('#search-item').on('input', function () {
+      clearTimeout($.data(this, 'timer'));
+      const wait = setTimeout(() => fetchItems(1), 300);
+      $(this).data('timer', wait);
+    });
+
+    $(document).on('click', '.page-link', function (e) {
+      e.preventDefault();
+      const page = parseInt($(this).data('page'));
+      if (!isNaN(page) && page >= 1 && page <= totalPages) {
+        fetchItems(page);
+      }
+    });
+
+    $('.sort-link').on('click', function (e) {
+      e.preventDefault();
+      const newSortField = $(this).data('sort');
+      if (sortField === newSortField) {
+        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortField = newSortField;
+        sortOrder = 'asc';
+      }
+      fetchItems(1);
+    });
+
+    $('#download-btn').on('click', function () {
+      const categoryId = $('#category').val();
+      const itemName = $('#search-item').val().trim();
+      let url = `/api/download-all/?token=${token}`;
+      if (categoryId) url += `&category_id=${categoryId}`;
+      if (itemName) url += `&item_name=${encodeURIComponent(itemName)}`;
+      window.open(url, '_blank');
+    });
+
+    $('#upload-btn').on('click', function () {
+      const file = $('#upload-file')[0].files[0];
+      if (!file) return alert("Please choose a CSV file.");
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      $.ajax({
+        url: '/api/upload-inventory/',
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function () {
+          alert("Upload successful!");
+          fetchItems(currentPage);
+        },
+        error: function () {
+          alert("Upload failed.");
         }
       });
     });
+
+    fetchItems();
   });
 </script>
 {% endblock %}

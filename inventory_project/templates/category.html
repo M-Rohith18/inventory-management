@@ -86,7 +86,7 @@
           'Content-Type': 'application/json',
         },
         data: JSON.stringify({ name, description }),
-        success: function (res) {
+        success: function (res) { 
           showToast(res.message || 'Category added successfully!', 'success');
           $('#add-category-form')[0].reset();
 

@@ -22,7 +22,7 @@ urlpatterns = [
     # Dashboard Category API
     path('api/categories/', views.CategoryListAPIView.as_view(), name='api_category_list'),
     # Dashboard Item API
-    path('api/items/', views.ItemListAPIView.as_view(), name='api_items_list'),
+    path('api/items/', views.ItemListViewAPIView.as_view(), name='api_items_list'),
 
     # Adding Category Template
     path('add_category/', views.add_category, name='add_category'),
@@ -47,8 +47,11 @@ urlpatterns = [
     path('api/stock-transactions/', views.StockTransactionListAPIView.as_view(), name='api_stock_transactions'),
 
     path('download/',views.download_reports, name= 'download'),
+
+    # Download Category and Items 
+    path('api/download-all/', views.DownloadAllCSVView.as_view(), name='download_all_csv'),
+
+    #Upload sheet
+    path('api/upload-inventory/', views.UploadInventoryCSV.as_view(), name='upload-inventory'),
+
 ]
-
-
-
-
